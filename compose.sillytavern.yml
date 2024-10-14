@@ -1,0 +1,25 @@
+services:
+  sillytavern:
+    # It's important to keep Harbor's container prefix
+    container_name: ${HARBOR_CONTAINER_PREFIX}.sillytavern
+    # Prefer to make version customizable
+    image: ghcr.io/sillytavern/sillytavern:${HARBOR_SILLYTAVERN_VERSION}
+    ports:
+    # When multiple ports are exposed, the one with lowest
+    # in-container port will be the "main" one
+      - ${HARBOR_SILLYTAVERN_HOST_PORT}:8000
+    volumes:
+    # sillytavern local workspace
+      - ./sillytavern/config:/home/node/app/config
+      - ./sillytavern/data:/home/node/app/data
+      - ./sillytavern/plugins:/home/node/app/plugins
+    # Global sillytavern cache/config folder should be
+    # set via a variable
+      # - ${HARBOR_SILLYTAVERN_CACHE}:/app/cache
+    env_file:
+    # Always add the main .env
+      - ./.env
+    # If sillytavern supports it, add an override too
+      # - ./sillytavern/override.env
+    networks:
+      - harbor-network

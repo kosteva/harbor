@@ -102,3 +102,7 @@ dist/
 
 # Aider
 .aider.chat.history.md
+
+# Silly Tavern
+sillytavern/data
+sillytavern/plugins
