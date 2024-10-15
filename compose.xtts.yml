@@ -1,0 +1,28 @@
+services:
+  xtts:
+    # It's important to keep Harbor's container prefix
+    container_name: ${HARBOR_CONTAINER_PREFIX}.xtts
+    # Prefer to make version customizable
+    image: xttsapiserver
+    build:
+      # context: .
+      dockerfile: ./xtts//Dockerfile
+    ports:
+    # When multiple ports are exposed, the one with lowest
+    # in-container port will be the "main" one
+      - ${HARBOR_XTTS_HOST_PORT}:8020
+    volumes:
+    # XTTS local workspace
+      # - ./XTTS/config:/home/node/app/config
+      - ./xtts/data:/xtts-server
+      # - ./XTTS/plugins:/home/node/app/plugins
+    # Global XTTS cache/config folder should be
+    # set via a variable
+      # - ${HARBOR_XTTS_CACHE}:/app/cache
+    env_file:
+    # Always add the main .env
+      - ./.env
+    # If XTTS supports it, add an override too
+      - ./xtts/override.env
+    networks:
+      - harbor-network
