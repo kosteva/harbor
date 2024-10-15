@@ -106,3 +106,6 @@ dist/
 # Silly Tavern
 sillytavern/data
 sillytavern/plugins
+
+# xtts
+xtts/data
