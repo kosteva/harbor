@@ -12,7 +12,7 @@ services:
       - URL=cumin.duckdns.org
       - SUBDOMAINS=wildcard
       - VALIDATION=duckdns
-      - DUCKDNSTOKEN=9b0a1d48-3d15-4fcf-80f9-fa21dc9c2cfd
+      - DUCKDNSTOKEN=${HARBOR_SWAG_DUCKDNSTOKEN}
     volumes:
       - ./swag/config:/config
     ports:
