@@ -111,4 +111,5 @@ sillytavern/plugins
 xtts/data
 
 # swag
-swag/config
+swag/config/*
+!swag/config/nginx/proxy-confs/*.conf
