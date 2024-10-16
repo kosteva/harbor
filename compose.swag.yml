@@ -1,0 +1,28 @@
+---
+services:
+  swag:
+    image: lscr.io/linuxserver/swag
+    container_name: ${HARBOR_CONTAINER_PREFIX}.swag
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - URL=cumin.duckdns.org
+      - SUBDOMAINS=wildcard
+      - VALIDATION=duckdns
+      - DUCKDNSTOKEN=9b0a1d48-3d15-4fcf-80f9-fa21dc9c2cfd
+    volumes:
+      - ./swag/config:/config
+    ports:
+      - 443:443
+      - 80:80
+    restart: unless-stopped
+    env_file:
+    # Always add the main .env
+      - ./.env
+    # If sillytavern supports it, add an override too
+      # - ./sillytavern/override.env
+    networks:
+      - harbor-network
