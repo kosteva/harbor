@@ -111,5 +111,4 @@ sillytavern/plugins
 xtts/data
 
 # swag
-swag/config/log
-swag/config/fail2ban/fail2ban.sqlite3
+swag/config
