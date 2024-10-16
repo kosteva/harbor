@@ -9,7 +9,7 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=America/New_York
-      - URL=cumin.duckdns.org
+      - URL=${HARBOR_SWAG_URL}
       - SUBDOMAINS=wildcard
       - VALIDATION=duckdns
       - DUCKDNSTOKEN=${HARBOR_SWAG_DUCKDNSTOKEN}
