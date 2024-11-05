@@ -4,7 +4,7 @@ services:
       - ./.env
       - ./forge/override.env
     container_name: ${HARBOR_CONTAINER_PREFIX}.forge
-    image: ghcr.io/ai-dock/forge:${HARBOR_FORGE_VERSION}
+    image: ghcr.io/ai-dock/stable-diffusion-webui-forge:${HARBOR_FORGE_VERSION}
     environment:
       # Auto-update - should be done with "harbor forge version" and
       # docker image pinning
