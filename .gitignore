@@ -113,3 +113,6 @@ xtts/data
 # swag
 swag/config/*
 !swag/config/nginx/proxy-confs/*.conf
+
+# forge
+forge/workspace/
