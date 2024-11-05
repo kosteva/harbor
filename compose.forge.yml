@@ -1,0 +1,40 @@
+services:
+  forge:
+    env_file:
+      - ./.env
+      - ./forge/override.env
+    container_name: ${HARBOR_CONTAINER_PREFIX}.forge
+    image: ghcr.io/ai-dock/forge:${HARBOR_FORGE_VERSION}
+    environment:
+      # Auto-update - should be done with "harbor forge version" and
+      # docker image pinning
+      - AUTO_UPDATE=false
+      # Should not establish tunnels by default, "harbor tunnel"
+      # should be used instead
+      - CF_QUICK_TUNNELS=false
+      # Ensure that workspace is synced automatically
+      # - WORKSPACE_SYNC=true
+      - WORKSPACE=/workspace
+
+      # Ports
+      - FORGE_PORT_HOST=${HARBOR_FORGE_HOST_PORT}
+      - SERVICEPORTAL_PORT_HOST=${HARBOR_FORGE_PORTAL_HOST_PORT}
+      - SYNCTHING_UI_PORT_HOST=${HARBOR_FORGE_SYNCTHING_HOST_PORT}
+
+      # Env settings
+      - WEB_ENABLE_AUTH=${HARBOR_FORGE_AUTH}
+      - WEB_USER=${HARBOR_FORGE_USER}
+      - WEB_PASSWORD=${HARBOR_FORGE_PASSWORD}
+      - HF_TOKEN=${HARBOR_HF_TOKEN}
+      - CIVITAI_TOKEN=${HARBOR_CIVITAI_TOKEN}
+      - FORGE_ARGS=${HARBOR_FORGE_ARGS}
+      - PROVISIONING_SCRIPT=${HARBOR_FORGE_PROVISIONING}
+    ports:
+      - ${HARBOR_FORGE_HOST_PORT}:${HARBOR_FORGE_HOST_PORT}
+      - ${HARBOR_FORGE_PORTAL_HOST_PORT}:${HARBOR_FORGE_PORTAL_HOST_PORT}
+      - ${HARBOR_FORGE_SYNCTHING_HOST_PORT}:${HARBOR_FORGE_SYNCTHING_HOST_PORT}
+    volumes:
+      - ./forge/workspace:/workspace
+    networks:
+      - harbor-network
+
