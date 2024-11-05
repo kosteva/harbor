@@ -116,3 +116,6 @@ swag/config/*
 
 # forge
 forge/workspace/
+
+# a1111
+a1111/workspace/

@@ -1,0 +1,40 @@
+services:
+  a1111:
+    env_file:
+      - ./.env
+      - ./a1111/override.env
+    container_name: ${HARBOR_CONTAINER_PREFIX}.a1111
+    image: ghcr.io/ai-dock/stable-diffusion-webui:${HARBOR_A1111_VERSION}
+    environment:
+      # Auto-update - should be done with "harbor a1111 version" and
+      # docker image pinning
+      - AUTO_UPDATE=false
+      # Should not establish tunnels by default, "harbor tunnel"
+      # should be used instead
+      - CF_QUICK_TUNNELS=false
+      # Ensure that workspace is synced automatically
+      # - WORKSPACE_SYNC=true
+      - WORKSPACE=/workspace
+
+      # Ports
+      - A1111_PORT_HOST=${HARBOR_A1111_HOST_PORT}
+      - SERVICEPORTAL_PORT_HOST=${HARBOR_A1111_PORTAL_HOST_PORT}
+      - SYNCTHING_UI_PORT_HOST=${HARBOR_A1111_SYNCTHING_HOST_PORT}
+
+      # Env settings
+      - WEB_ENABLE_AUTH=${HARBOR_A1111_AUTH}
+      - WEB_USER=${HARBOR_A1111_USER}
+      - WEB_PASSWORD=${HARBOR_A1111_PASSWORD}
+      - HF_TOKEN=${HARBOR_HF_TOKEN}
+      - CIVITAI_TOKEN=${HARBOR_CIVITAI_TOKEN}
+      - A1111_ARGS=${HARBOR_A1111_ARGS}
+      - PROVISIONING_SCRIPT=${HARBOR_A1111_PROVISIONING}
+    ports:
+      - ${HARBOR_A1111_HOST_PORT}:${HARBOR_A1111_HOST_PORT}
+      - ${HARBOR_A1111_PORTAL_HOST_PORT}:${HARBOR_A1111_PORTAL_HOST_PORT}
+      - ${HARBOR_A1111_SYNCTHING_HOST_PORT}:${HARBOR_A1111_SYNCTHING_HOST_PORT}
+    volumes:
+      - ./a1111/workspace:/workspace
+    networks:
+      - harbor-network
+
