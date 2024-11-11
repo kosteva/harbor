@@ -5,6 +5,13 @@ services:
       - ./forge/override.env
     container_name: ${HARBOR_CONTAINER_PREFIX}.forge
     image: ghcr.io/ai-dock/stable-diffusion-webui-forge:${HARBOR_FORGE_VERSION}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
       # Auto-update - should be done with "harbor forge version" and
       # docker image pinning
