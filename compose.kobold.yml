@@ -28,6 +28,7 @@ services:
       # Ports
 
       - KCPP_MODEL=https://huggingface.co/TheDrummer/Ministrations-8B-v1-GGUF/resolve/main/Ministrations-8B-v1a-Q5_K_M.gguf
+      - KCPP_IMGMODEL=https://civitai.com/api/download/models/538928?type=Model&format=SafeTensor&size=pruned&fp=fp16
       - KCPP_DONT_REMOVE_MODELS=true
       
       - KOBOLD_PORT_HOST=${HARBOR_KOBOLD_HOST_PORT}
