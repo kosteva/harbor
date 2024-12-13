@@ -6,19 +6,38 @@ services:
     container_name: ${HARBOR_CONTAINER_PREFIX}.kobold
     image: koboldai/koboldcpp
     platform: linux/x86_64
+    deploy: # You can remove this section if you do not wish to use an Nvidia GPU
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
+
     environment:
       # Auto-update - should be done with "harbor kobold version" and
       # docker image pinning
-      - AUTO_UPDATE=false
+      # - AUTO_UPDATE=false
       # Should not establish tunnels by default, "harbor tunnel"
       # should be used instead
-      - CF_QUICK_TUNNELS=false
+      # - CF_QUICK_TUNNELS=false
       # Ensure that workspace is synced automatically
       # - WORKSPACE_SYNC=true
-      - WORKSPACE=/workspace
-      - KCPP_MODEL=https://huggingface.co/TheDrummer/Ministrations-8B-v1-GGUF/resolve/main/Ministrations-8B-v1a-Q5_K_M.gguf
+      # - WORKSPACE=/workspace
+      
       # Ports
+
+      - KCPP_MODEL=https://huggingface.co/TheDrummer/Ministrations-8B-v1-GGUF/resolve/main/Ministrations-8B-v1a-Q5_K_M.gguf
+      - KCPP_DONT_REMOVE_MODELS=true
+      
       - KOBOLD_PORT_HOST=${HARBOR_KOBOLD_HOST_PORT}
+
+      # - KCPP_MODEL=https://huggingface.co/concedo/KobbleTinyV2-1.1B-GGUF/resolve/main/KobbleTiny-Q4_K.gguf?download=true # Remove this line if you wish to supply your own model offline
+      # - KCPP_DONT_REMOVE_MODELS=true
+      # - KCPP_DONT_UPDATE=false
+      # - KCPP_DONT_TUNNEL=true
+      # - KCPP_ARGS=--model model.gguf --usecublas --gpulayers 99 --multiuser 20 --quiet # Remove --model model.gguf if you are using a comma split model with the KCPP_MODEL argument, remove --usecublas --gpulay>
+ 
 
       # Env settings
     ports:
