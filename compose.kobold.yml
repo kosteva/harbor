@@ -35,7 +35,7 @@ services:
       # - KCPP_MODEL=https://huggingface.co/concedo/KobbleTinyV2-1.1B-GGUF/resolve/main/KobbleTiny-Q4_K.gguf?download=true # Remove this line if you wish to supply your own model offline
       # - KCPP_DONT_REMOVE_MODELS=true
       # - KCPP_DONT_UPDATE=false
-      # - KCPP_DONT_TUNNEL=true
+      - KCPP_DONT_TUNNEL=true
       # - KCPP_ARGS=--model model.gguf --usecublas --gpulayers 99 --multiuser 20 --quiet # Remove --model model.gguf if you are using a comma split model with the KCPP_MODEL argument, remove --usecublas --gpulay>
  
 
