@@ -1,0 +1,30 @@
+services:
+  kobold:
+    env_file:
+      - ./.env
+      # - ./kobold/override.env
+    container_name: ${HARBOR_CONTAINER_PREFIX}.kobold
+    image: koboldai/koboldcpp
+    platform: linux/x86_64
+    environment:
+      # Auto-update - should be done with "harbor kobold version" and
+      # docker image pinning
+      - AUTO_UPDATE=false
+      # Should not establish tunnels by default, "harbor tunnel"
+      # should be used instead
+      - CF_QUICK_TUNNELS=false
+      # Ensure that workspace is synced automatically
+      # - WORKSPACE_SYNC=true
+      - WORKSPACE=/workspace
+      - KCPP_MODEL=https://huggingface.co/TheDrummer/Ministrations-8B-v1-GGUF/resolve/main/Ministrations-8B-v1a-Q5_K_M.gguf
+      # Ports
+      - KOBOLD_PORT_HOST=${HARBOR_KOBOLD_HOST_PORT}
+
+      # Env settings
+    ports:
+      - ${HARBOR_KOBOLD_HOST_PORT}:5001
+    volumes:
+      - ./kobold/workspace:/workspace
+    networks:
+      - harbor-network
+
