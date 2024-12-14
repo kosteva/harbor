@@ -1,0 +1,33 @@
+---
+services:
+  traffic:
+    image: traefik:v3.2
+    # command: --api.insecure=true --providers.docker 
+    container_name: ${HARBOR_CONTAINER_PREFIX}.traffic
+    # cap_add:
+    #   - NET_ADMIN
+    environment:
+      - TRAEFIK_API_INSECURE=true
+      - TRAEFIK_PROVIDERS_DOCKER=true
+      - TRAEFIK_PROVIDERS_DOCKER_DEFAULTRULE=Host(`{{ .Name | replace "-" "." }}.${HARBOR_TRAFFIC_DOMAIN}`)
+
+    #   - PUID=1000
+    #   - PGID=1000
+    #   - TZ=America/New_York
+    #   - URL=${HARBOR_TRAFFIC_URL}
+    #   - SUBDOMAINS=wildcard
+    #   - VALIDATION=duckdns
+    #   - DUCKDNSTOKEN=${HARBOR_TRAFFIC_DUCKDNSTOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 80:80
+      - 8080:8080
+    restart: unless-stopped
+    env_file:
+    # Always add the main .env
+      - ./.env
+    # If sillytavern supports it, add an override too
+      # - ./sillytavern/override.env
+    networks:
+      - harbor-network
