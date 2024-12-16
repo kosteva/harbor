@@ -5,6 +5,13 @@ services:
       - ./a1111/override.env
     container_name: ${HARBOR_CONTAINER_PREFIX}.a1111
     image: ghcr.io/ai-dock/stable-diffusion-webui:${HARBOR_A1111_VERSION}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
       # Auto-update - should be done with "harbor a1111 version" and
       # docker image pinning
