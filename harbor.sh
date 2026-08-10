@@ -10356,6 +10356,18 @@ run_marinara_command() {
             env_manager set marinara.basic.auth.pass "$2"
         fi
         ;;
+    trusted-hosts)
+        shift
+        env_manager_alias marinara.trusted.hosts "$@"
+        ;;
+    csrf-origins)
+        shift
+        env_manager_alias marinara.csrf.trusted.origins "$@"
+        ;;
+    ip-allowlist)
+        shift
+        env_manager_alias marinara.ip.allowlist "$@"
+        ;;
     log)
         shift
         env_manager_alias marinara.log.level "$@"
@@ -10384,6 +10396,9 @@ run_marinara_command() {
         echo "  harbor marinara key [key]             - Get/set Marinara ENCRYPTION_KEY"
         echo "  harbor marinara key generate           - Generate and set a new ENCRYPTION_KEY"
         echo "  harbor marinara auth <user> <pass>     - Set BASIC_AUTH_USER/BASIC_AUTH_PASS"
+        echo "  harbor marinara trusted-hosts [hosts]  - Get/set TRUSTED_HOSTS (comma-separated)"
+        echo "  harbor marinara csrf-origins [origins] - Get/set CSRF_TRUSTED_ORIGINS (comma-separated)"
+        echo "  harbor marinara ip-allowlist [ips]     - Get/set IP_ALLOWLIST (comma-separated IPs/CIDRs)"
         echo "  harbor marinara log [level]            - Get/set Marinara LOG_LEVEL"
         echo "  harbor marinara local [on|off]         - Get/set *_LOCAL_URLS_ENABLED (allow LAN/Docker backends)"
         echo "  harbor marinara workspace              - Open the Marinara workspace directory"

@@ -467,11 +467,14 @@
 - label: harbor ls includes marinara and harbor up marinara resolves a valid compose configuration
   command: ./harbor.sh ls | grep -q '^marinara$'
   tags: [spec, implemented]
-- label: run_marinara_command exists in harbor.sh and is reachable from the main dispatch case, exposing version, secret, key, auth, log, local and workspace subcommands
+- label: run_marinara_command exists in harbor.sh and is reachable from the main dispatch case, exposing version, secret, key, auth, trusted-hosts, csrf-origins, ip-allowlist, log, local and workspace subcommands
   command: grep -q 'run_marinara_command()' harbor.sh && grep -qF 'run_marinara_command "$@"' harbor.sh
   tags: [spec, implemented]
 - label: harbor marinara key generate refuses to silently overwrite an existing non-empty encryption key without --force
   command: grep -A6 "generate)" harbor.sh | grep -q -- '--force'
+  tags: [spec, implemented]
+- label: marinara's TRUSTED_HOSTS, CSRF_TRUSTED_ORIGINS, IP_ALLOWLIST and IP_ALLOWLIST_ENABLED are all passed through to the container and each has a dedicated harbor marinara CLI subcommand
+  command: bash -c 'for v in TRUSTED_HOSTS CSRF_TRUSTED_ORIGINS IP_ALLOWLIST IP_ALLOWLIST_ENABLED; do grep -q "$v=\${HARBOR_MARINARA_$v" services/compose.marinara.yml || exit 1; done && grep -q "trusted-hosts)" harbor.sh && grep -q "csrf-origins)" harbor.sh && grep -q "ip-allowlist)" harbor.sh'
   tags: [spec, implemented]
 - label: marinara has metadata (name, tags, logo, wikiUrl) registered in app/src/serviceMetadata.ts
   command: grep -q "marinara" app/src/serviceMetadata.ts
