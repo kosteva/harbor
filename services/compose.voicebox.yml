@@ -57,3 +57,25 @@ services:
       - ${HARBOR_VOICEBOX_WORKSPACE}:/workspace
     networks:
       - harbor-network
+
+  # Voicebox has no OpenAI-shaped TTS API of its own; this bridges
+  # /v1/audio/speech and /v1/voices to Voicebox's real /generate + /profiles
+  # endpoints, so any OpenAI-compatible TTS client (e.g. Marinara) can use it.
+  voicebox-openai:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.voicebox-openai
+    build:
+      context: ./services/voicebox/openai
+      dockerfile: Dockerfile
+    env_file:
+      - ./.env
+      - ./services/voicebox/override.env
+    volumes:
+      - ./services/voicebox/openai/app.js:/voicebox2openai/app.js
+    networks:
+      - harbor-network
+    environment:
+      - VOICEBOX_API_URL=http://voicebox:17493
+      - DEFAULT_VOICE=${HARBOR_VOICEBOX_OPENAI_DEFAULT_VOICE}
+      - MODEL_SIZE=${HARBOR_VOICEBOX_DEFAULT_MODEL_SIZE}
+    ports:
+      - ${HARBOR_VOICEBOX_OPENAI_HOST_PORT}:3000

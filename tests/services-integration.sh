@@ -930,6 +930,29 @@ group_J() {
   "$HARBOR" up voicebox >/dev/null 2>&1
   rocm_devices "J5 voicebox rocm devices" harbor.voicebox
   probe_200 "J5 voicebox health" "$(svc_url voicebox)/health" 600
+
+  # J5b voicebox-openai bridge — reachability, voice discovery, and profile
+  # creation only. Real audio generation needs a loaded TTS model (voicebox's
+  # own docs note the first generation is a slow model download), so it's
+  # scoped down the same way J5 itself avoids a full inference call.
+  local vb2oai_url
+  vb2oai_url=$(svc_url voicebox-openai)
+  if probe_200 "J5b voicebox-openai voices (empty)" "$vb2oai_url/v1/voices" 60; then
+    local created_name
+    created_name=$(curl -s -m 10 -X POST "$(svc_url voicebox)/profiles" \
+      -H 'Content-Type: application/json' -d '{"name":"harbor-it-tts"}' \
+      | jq -r '.name // empty')
+    if [ "$created_name" = "harbor-it-tts" ]; then
+      record PASS "J5b voicebox profile create"
+    else
+      record FAIL "J5b voicebox profile create"
+    fi
+    if curl -s -m 10 "$vb2oai_url/v1/voices" | jq -e '.voices[] | select(.name == "harbor-it-tts")' >/dev/null 2>&1; then
+      record PASS "J5b voicebox-openai voice discovery"
+    else
+      record FAIL "J5b voicebox-openai voice discovery" "harbor-it-tts not listed"
+    fi
+  fi
   "$HARBOR" down >/dev/null 2>&1
 
   # J6 vllm — default image is a CUDA build; only run when the user has

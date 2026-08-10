@@ -1,0 +1,11 @@
+services:
+  marinara:
+    depends_on:
+      - voicebox-openai
+    environment:
+      # Voicebox has no OpenAI-shaped TTS API of its own; voicebox-openai bridges
+      # /v1/audio/speech and /v1/voices to Voicebox's real /generate + /profiles.
+      # Create the connection in Marinara's TTS settings with
+      # Base URL http://voicebox-openai:3000/v1
+      - PROVIDER_LOCAL_URLS_ENABLED=true
+      - TTS_LOCAL_URLS_ENABLED=true

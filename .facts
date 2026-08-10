@@ -484,6 +484,17 @@
 - label: every marinara backend cross-file (dmr, llamacpp, mlx, ollama, omlx) opens the PROVIDER_LOCAL_URLS_ENABLED gate and depends_on the backend with condition service_healthy, since Marinara connections are created in its UI and there is no env var to auto-configure one
   command: bash -c 'for f in services/compose.x.marinara.{dmr,llamacpp,mlx,ollama,omlx}.yml; do grep -q PROVIDER_LOCAL_URLS_ENABLED=true $f && grep -q service_healthy $f || exit 1; done'
   tags: [spec, implemented]
+- label: marinara has a compose.x integration with voicebox-openai that opens both PROVIDER_LOCAL_URLS_ENABLED and TTS_LOCAL_URLS_ENABLED, since Voicebox needs the bridge and Marinara has no env var to auto-configure a TTS connection
+  command: test -f services/compose.x.marinara.voicebox.yml && grep -q 'TTS_LOCAL_URLS_ENABLED=true' services/compose.x.marinara.voicebox.yml && grep -q 'PROVIDER_LOCAL_URLS_ENABLED=true' services/compose.x.marinara.voicebox.yml
+  tags: [spec, implemented]
+
+## voicebox
+- label: voicebox-openai bridges Voicebox's proprietary API to OpenAI's TTS shape (/v1/audio/speech, /v1/voices), building from services/voicebox/openai and exposing HARBOR_VOICEBOX_OPENAI_HOST_PORT
+  command: test -d services/voicebox/openai && grep -q 'voicebox-openai' services/compose.voicebox.yml && grep -q 'HARBOR_VOICEBOX_OPENAI_HOST_PORT' profiles/default.env
+  tags: [spec, implemented]
+- label: voicebox-openai resolves the OpenAI voice parameter to a Voicebox profile by case-insensitive name match, an explicit profile:<id> override, then HARBOR_VOICEBOX_OPENAI_DEFAULT_VOICE, falling back to the first existing profile
+  command: grep -q 'profile:(.+)' services/voicebox/openai/app.js && grep -q 'DEFAULT_VOICE' services/voicebox/openai/app.js
+  tags: [spec, implemented]
 
 # app
 - label: Harbor App blocks main UI behind a setup gate until setup detail status is ready

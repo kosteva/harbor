@@ -622,6 +622,18 @@ Groups run serially, one service at a time (they contend for the iGPU).
   currently ineffective beyond device passthrough; GPU support needs a
   ROCm-torch image upstream. J5 asserts startup + devices only.
 
+### J5b. voicebox-openai (bridge reachability + voice discovery only)
+
+- `harbor up voicebox` always starts **voicebox-openai** alongside it — an
+  OpenAI-compatible TTS bridge in front of Voicebox's own API (see
+  `docs/2.1.16-Frontend-Voicebox.md`).
+- `GET /v1/voices` 200 within 60s; `POST /profiles {"name":"harbor-it-tts"}`
+  against Voicebox itself succeeds; the new profile then appears in the
+  bridge's `/v1/voices` list.
+- Real audio generation (`POST /v1/audio/speech`) is intentionally not
+  exercised here — same reasoning as J5 above: the first generation is a
+  slow TTS model download, not something to pay for on every ROCm run.
+
 ### J6. vllm.rocm (manual image switch; SKIPped unless configured)
 
 - The default `HARBOR_VLLM_IMAGE=vllm/vllm-openai` is a **CUDA build** — the
