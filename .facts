@@ -441,6 +441,50 @@
   command: grep -q socat services/omnichain/Dockerfile
   tags: [spec, svc-testing, implemented]
 
+## marinara
+- marinara wraps Pasta-Devs/Marinara-Engine, a local-first AI chat/roleplay/game-master frontend, as a Harbor frontend service using its prebuilt GHCR image @spec @implemented
+- label: marinara has a compose file at services/compose.marinara.yml defining a marinara service on the harbor network
+  command: test -f services/compose.marinara.yml && grep -q 'harbor-network' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: marinara runs the prebuilt ghcr.io/pasta-devs/marinara-engine image, not a source build
+  command: grep -q 'HARBOR_MARINARA_IMAGE' services/compose.marinara.yml && grep -q 'ghcr.io/pasta-devs/marinara-engine' profiles/default.env
+  tags: [spec, implemented]
+- label: marinara publishes its web UI on container port 7860 via HARBOR_MARINARA_HOST_PORT
+  command: grep -q 'HARBOR_MARINARA_HOST_PORT' profiles/default.env && grep -q '7860' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: marinara persists data at HARBOR_MARINARA_WORKSPACE/data mounted to /app/data
+  command: grep -q 'HARBOR_MARINARA_WORKSPACE' profiles/default.env && grep -q '/app/data' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: marinara runs as the host user via MARINARA_DOCKER_USER/MARINARA_DOCKER_GROUP set from HARBOR_USER_ID/HARBOR_GROUP_ID, so the bind mount stays owned by the host user without a separate init sidecar
+  command: grep -qF 'MARINARA_DOCKER_USER=${HARBOR_USER_ID' services/compose.marinara.yml && grep -qF 'MARINARA_DOCKER_GROUP=${HARBOR_GROUP_ID' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: marinara's PROVIDER_LOCAL_URLS_ENABLED, IMAGE_LOCAL_URLS_ENABLED and TTS_LOCAL_URLS_ENABLED are all driven by a single HARBOR_MARINARA_LOCAL_URLS key, defaulting to false since model connections can otherwise reach arbitrary private-network addresses
+  command: test $(grep -c 'HARBOR_MARINARA_LOCAL_URLS' services/compose.marinara.yml) -eq 3 && grep -q 'HARBOR_MARINARA_LOCAL_URLS="false"' profiles/default.env
+  tags: [spec, implemented]
+- label: marinara has a traefik cross-file routing to container port 7860, generated in the same format as seed-traefik.ts produces
+  command: test -f services/compose.x.traefik.marinara.yml && grep -q 'loadbalancer.server.port=7860' services/compose.x.traefik.marinara.yml
+  tags: [spec, implemented]
+- label: harbor ls includes marinara and harbor up marinara resolves a valid compose configuration
+  command: ./harbor.sh ls | grep -q '^marinara$'
+  tags: [spec, implemented]
+- label: run_marinara_command exists in harbor.sh and is reachable from the main dispatch case, exposing version, secret, key, auth, log, local and workspace subcommands
+  command: grep -q 'run_marinara_command()' harbor.sh && grep -qF 'run_marinara_command "$@"' harbor.sh
+  tags: [spec, implemented]
+- label: harbor marinara key generate refuses to silently overwrite an existing non-empty encryption key without --force
+  command: grep -A6 "generate)" harbor.sh | grep -q -- '--force'
+  tags: [spec, implemented]
+- label: marinara has metadata (name, tags, logo, wikiUrl) registered in app/src/serviceMetadata.ts
+  command: grep -q "marinara" app/src/serviceMetadata.ts
+  tags: [spec, implemented]
+- label: marinara has a documentation page at docs/2.1.17-Frontend-Marinara.md covering env vars, the harbor marinara CLI, and connecting to a Harbor backend
+  command: test -f docs/2.1.17-Frontend-Marinara.md
+  tags: [spec, implemented]
+
+## marinara x backends
+- label: every marinara backend cross-file (dmr, llamacpp, mlx, ollama, omlx) opens the PROVIDER_LOCAL_URLS_ENABLED gate and depends_on the backend with condition service_healthy, since Marinara connections are created in its UI and there is no env var to auto-configure one
+  command: bash -c 'for f in services/compose.x.marinara.{dmr,llamacpp,mlx,ollama,omlx}.yml; do grep -q PROVIDER_LOCAL_URLS_ENABLED=true $f && grep -q service_healthy $f || exit 1; done'
+  tags: [spec, implemented]
+
 # app
 - label: Harbor App blocks main UI behind a setup gate until setup detail status is ready
   command: rg -q 'detail\?\.status === "ready"' app/src/setup/HarborSetupContext.tsx

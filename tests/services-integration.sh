@@ -1222,6 +1222,43 @@ group_K() {
   fi
 
   teardown
+
+  # --- K-c: marinara llamacpp (local-backend wiring; Marinara has no env-seeded
+  # connection, so this only asserts the cross-file gate, not a full chat)
+  log "Group K-c: marinara llamacpp"
+
+  "$HARBOR" up marinara llamacpp >/dev/null 2>&1
+
+  # K13 marinara — ready + host-user-owned data dir (validates
+  # MARINARA_DOCKER_USER/MARINARA_DOCKER_GROUP instead of an init sidecar)
+  local marinara_url
+  marinara_url=$(svc_url marinara)
+  if probe_200 "K13 marinara ready" "$marinara_url/" 180; then
+    record PASS "K13 marinara ready"
+  fi
+  if [ -d services/marinara/data ]; then
+    local owner
+    owner=$(stat -c '%u' services/marinara/data 2>/dev/null || stat -f '%u' services/marinara/data 2>/dev/null)  # harbor-lint disable=HARBOR010
+    if [ "$owner" = "$(id -u)" ]; then
+      record PASS "K13 marinara data dir host-owned" "uid=$owner"
+    else
+      record FAIL "K13 marinara data dir host-owned" "uid=$owner, expected $(id -u)"
+    fi
+  else
+    record SKIP "K13 marinara data dir host-owned" "services/marinara/data not created yet"
+  fi
+
+  # K14 marinara<->llamacpp cross-file wiring: local-URL gate opened + llamacpp reachable
+  if docker exec harbor.marinara env 2>/dev/null | grep '^PROVIDER_LOCAL_URLS_ENABLED=true' >/dev/null; then
+    record PASS "K14 marinara llamacpp local-URL gate open"
+  else
+    record FAIL "K14 marinara llamacpp local-URL gate open" "PROVIDER_LOCAL_URLS_ENABLED not true"
+  fi
+  if probe_200 "K14 llamacpp reachable" "$(svc_url llamacpp)/health" 300; then
+    record PASS "K14 llamacpp reachable" "ready for Marinara to fetch models at http://llamacpp:8080/v1"
+  fi
+
+  teardown
 }
 
 group_L() {
@@ -1773,7 +1810,7 @@ G  fabric cmdh                           (run-style CLIs via ollama)
 H  kobold speaches txtairag plandex webtop (batch 3, two sub-batches)
 I  webui searxng litellm boost jupyter promptfoo comfyui chatui librechat langflow (depth: chat/eval/kernel/workflow/flow)
 J  llamacpp ollama lemonade localai voicebox vllm (ROCm paths; skipped on non-ROCm hosts, excluded by default)
-K  landing hollama mikupad mock-openai qdrant libretranslate netdata dbhub drawio sillytavern lobechat traefik (standalone web services + routed traefik)
+K  landing hollama mikupad mock-openai qdrant libretranslate netdata dbhub drawio sillytavern lobechat traefik marinara llamacpp (standalone web services + routed traefik)
 L  anythingllm sqlchat khoj perplexica ldr presenton aider opint oterm parllama (LLM frontends + CLIs)
 M  bifrost optillm litellm metamcp mcpo supergateway pipelines mcp-inspector (proxies/gateways/MCP; git builds on first up)
 EOF

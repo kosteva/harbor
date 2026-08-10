@@ -653,6 +653,9 @@ overlays) and a routed target for traefik (landing), so they run as a second
 `harbor up ollama drawio sillytavern lobechat traefik landing` after the K-a
 checks, with `qwen3:0.6b` pulled into ollama.
 
+Sub-batch K-c (K13–K14) covers `marinara` and its `llamacpp` cross-file, run as
+a third `harbor up marinara llamacpp` after K-b's teardown.
+
 ### K1. landing
 
 - Ready: `GET /` returns 200 within 120 s.
@@ -773,6 +776,33 @@ Teardown: `./harbor.sh down` + `harbor env libretranslate unset LT_LOAD_ONLY`.
   `profiles/default.env`.
 
 Teardown (K-b): `./harbor.sh down`; drawio.ai_model restored.
+
+Sub-batch K-c (K13–K14) covers `marinara` (Pasta-Devs/Marinara-Engine) and its
+`llamacpp` cross-file integration: `harbor up marinara llamacpp`. Marinara also
+ships cross-files for `dmr`, `mlx`, `ollama`, and `omlx` (same shape); `llamacpp`
+is exercised here since it's a default service and CPU-friendly.
+
+### K13. marinara
+
+- Ready: `GET /` 200 within 180 s.
+- Data ownership: `services/marinara/data` is owned by the host uid, not
+  root — validates `MARINARA_DOCKER_USER`/`MARINARA_DOCKER_GROUP` (derived
+  from `HARBOR_USER_ID`/`HARBOR_GROUP_ID`) instead of a separate init
+  sidecar; the upstream entrypoint chowns the mount then drops privileges.
+
+### K14. marinara + llamacpp local-URL wiring
+
+- Marinara has no env var that seeds a model connection — every provider is
+  added by hand in the UI (Connections → New → Custom (OAI-Compatible)).
+  So this only asserts the cross-file's precondition, not a full chat: it
+  is necessarily a headless-CLI limit, not a Marinara bug.
+- Integration: container env has `PROVIDER_LOCAL_URLS_ENABLED=true` (the
+  `compose.x.marinara.llamacpp.yml` overlay), which is required before
+  Marinara will accept a Base URL on the Docker-internal `llamacpp` address.
+- Sanity: `llamacpp`'s `GET /health` returns 200, confirming it is ready to
+  be added as a connection at `http://llamacpp:8080/v1`.
+
+Teardown (K-c): `./harbor.sh down`.
 
 ## Group L — LLM frontends via ollama/llamacpp (Batch L of the Coverage Plan)
 

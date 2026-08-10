@@ -1121,4 +1121,12 @@ export const serviceMetadata: Record<string, Partial<HarborService>> = {
         wikiUrl: `${wikiUrl}/2.2.25-Backend-Speech-To-Speech`,
         tooltip: 'Modular realtime voice pipeline (VAD, STT, LLM, TTS) exposing an OpenAI Realtime-compatible WebSocket API.',
     },
+    marinara: {
+        name: 'Marinara Engine',
+        tags: [HST.frontend, HST.tools],
+        projectUrl: 'https://github.com/Pasta-Devs/Marinara-Engine',
+        logo: 'https://www.google.com/s2/favicons?domain=spicymarinara.github.io&sz=128',
+        wikiUrl: `${wikiUrl}/2.1.17-Frontend-Marinara`,
+        tooltip: 'Local-first AI chat, roleplay, and game-master frontend with character cards, lorebooks, and BYOK model connections.',
+    },
 };

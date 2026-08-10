@@ -1,0 +1,34 @@
+services:
+  marinara:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.marinara
+    image: ${HARBOR_MARINARA_IMAGE}:${HARBOR_MARINARA_VERSION}
+    init: true
+    env_file:
+      - ./.env
+      - ./services/marinara/override.env
+    ports:
+      - ${HARBOR_MARINARA_HOST_PORT}:7860
+    volumes:
+      - ${HARBOR_MARINARA_WORKSPACE}/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=7860
+      - DATA_DIR=/app/data
+      - FILE_STORAGE_DIR=/app/data/storage
+      - MARINARA_DOCKER=true
+      # Run as the host user so the bind mount stays manageable without sudo.
+      - MARINARA_DOCKER_USER=${HARBOR_USER_ID:-node}
+      - MARINARA_DOCKER_GROUP=${HARBOR_GROUP_ID:-node}
+      - ADMIN_SECRET=${HARBOR_MARINARA_ADMIN_SECRET:-}
+      - ENCRYPTION_KEY=${HARBOR_MARINARA_ENCRYPTION_KEY:-}
+      - BASIC_AUTH_USER=${HARBOR_MARINARA_BASIC_AUTH_USER:-}
+      - BASIC_AUTH_PASS=${HARBOR_MARINARA_BASIC_AUTH_PASS:-}
+      - LOG_LEVEL=${HARBOR_MARINARA_LOG_LEVEL}
+      - TRUSTED_HOSTS=${HARBOR_MARINARA_TRUSTED_HOSTS:-}
+      - CSRF_TRUSTED_ORIGINS=${HARBOR_MARINARA_CSRF_TRUSTED_ORIGINS:-}
+      - PROVIDER_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
+      - IMAGE_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
+      - TTS_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
+    networks:
+      - harbor-network

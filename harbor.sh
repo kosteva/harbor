@@ -391,6 +391,7 @@ show_help() {
     echo "  webtop    - Configure Webtop service"
     echo "  mcp       - Configure MCP service"
     echo "  oterm     - Configure oterm service"
+    echo "  marinara  - Configure Marinara Engine service"
     echo
     echo "Service CLIs:"
     echo "  ollama     - Run Ollama CLI (docker). Service should be running."
@@ -4387,7 +4388,7 @@ _harbor_completions() {
     }
 
     # Top-level subcommands
-    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
+    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui marinara tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
 
     # Commands that accept service names as arguments
     local service_commands="up u start s down d logs log l build shell pull exec run stats attach cmd eject open o url qr launch dive env"
@@ -4691,6 +4692,7 @@ _harbor() {
         'mi:Run mi agent'
         'npcsh:Run npcsh'
         'webui:Configure Open WebUI'
+        'marinara:Configure Marinara Engine'
         'tabbyapi:Configure TabbyAPI'
         'parllama:Launch Parllama'
         'oterm:Configure oterm'
@@ -5142,6 +5144,7 @@ complete -c harbor -n __harbor_no_subcommand -a facts -d 'Run facts CLI'
 complete -c harbor -n __harbor_no_subcommand -a mi -d 'Run mi agent'
 complete -c harbor -n __harbor_no_subcommand -a npcsh -d 'Run npcsh'
 complete -c harbor -n __harbor_no_subcommand -a webui -d 'Configure Open WebUI'
+complete -c harbor -n __harbor_no_subcommand -a marinara -d 'Configure Marinara Engine'
 complete -c harbor -n __harbor_no_subcommand -a tabbyapi -d 'Configure TabbyAPI'
 complete -c harbor -n __harbor_no_subcommand -a parllama -d 'Launch Parllama'
 complete -c harbor -n __harbor_no_subcommand -a oterm -d 'Configure oterm'
@@ -6286,7 +6289,7 @@ suggest_command() {
         stats attach cmd help --help -h hf defaults alias aliases a link ln
         unlink unln launch open o url qr list ls version --version -v smi top dive eject
         ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai
-        opencode facts mi npcsh webui tabbyapi parllama oterm plandex pdx mistralrs
+        opencode facts mi npcsh webui marinara tabbyapi parllama oterm plandex pdx mistralrs
         interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai
         aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang
         jupyter ol1 ktransformers openhands oh stt speaches boost nexa
@@ -10315,6 +10318,83 @@ run_webui_command() {
     esac
 }
 
+run_marinara_command() {
+    case "$1" in
+    version)
+        shift
+        env_manager_alias marinara.version "$@"
+        ;;
+    secret)
+        shift
+        env_manager_alias marinara.admin.secret "$@"
+        ;;
+    key)
+        case "$2" in
+        generate)
+            local existing
+            existing=$(env_manager get marinara.encryption.key)
+            if [ -n "$existing" ] && [ "$3" != "--force" ]; then
+                log_error "marinara.encryption.key is already set. Rotating it makes data" \
+                    "encrypted with the old key (stored API keys, etc.) unreadable."
+                log_error "Re-run with 'harbor marinara key generate --force' to overwrite it."
+                return 1
+            fi
+            env_manager set marinara.encryption.key "$(openssl rand -hex 32)"
+            ;;
+        *)
+            shift
+            env_manager_alias marinara.encryption.key "$@"
+            ;;
+        esac
+        ;;
+    auth)
+        shift
+        if [ $# -eq 0 ]; then
+            env_manager get marinara.basic.auth.user
+        else
+            env_manager set marinara.basic.auth.user "$1"
+            env_manager set marinara.basic.auth.pass "$2"
+        fi
+        ;;
+    log)
+        shift
+        env_manager_alias marinara.log.level "$@"
+        ;;
+    local)
+        shift
+        case "$1" in
+        on) env_manager set marinara.local.urls "true" ;;
+        off) env_manager set marinara.local.urls "false" ;;
+        "") env_manager get marinara.local.urls ;;
+        *) env_manager set marinara.local.urls "$1" ;;
+        esac
+        ;;
+    workspace)
+        shift
+        execute_and_process "env_manager get marinara.workspace" "sys_open {{output}}" "No marinara.workspace set"
+        ;;
+    -h | --help | help)
+        echo "Please note that this is not Marinara Engine CLI, but a Harbor CLI to manage Marinara service."
+        echo
+        echo "Usage: harbor marinara <command>"
+        echo
+        echo "Commands:"
+        echo "  harbor marinara version [tag]         - Get/set Marinara Engine version docker tag"
+        echo "  harbor marinara secret [secret]       - Get/set Marinara ADMIN_SECRET"
+        echo "  harbor marinara key [key]             - Get/set Marinara ENCRYPTION_KEY"
+        echo "  harbor marinara key generate           - Generate and set a new ENCRYPTION_KEY"
+        echo "  harbor marinara auth <user> <pass>     - Set BASIC_AUTH_USER/BASIC_AUTH_PASS"
+        echo "  harbor marinara log [level]            - Get/set Marinara LOG_LEVEL"
+        echo "  harbor marinara local [on|off]         - Get/set *_LOCAL_URLS_ENABLED (allow LAN/Docker backends)"
+        echo "  harbor marinara workspace              - Open the Marinara workspace directory"
+        return 1
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
 run_tabbyapi_command() {
     update_model_spec() {
         local spec=""
@@ -12686,6 +12766,10 @@ main_entrypoint() {
     webui)
         shift
         run_webui_command "$@"
+        ;;
+    marinara)
+        shift
+        run_marinara_command "$@"
         ;;
     tabbyapi)
         shift
