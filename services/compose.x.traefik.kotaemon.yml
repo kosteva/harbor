@@ -9,10 +9,15 @@ services:
       - "traefik.http.routers.kotaemon.entrypoints=websecure"
       - "traefik.http.routers.kotaemon.tls=true"
       # A router's tls=true does NOT inherit the websecure entrypoint's
-      # default certResolver (verified empirically against a live Traefik
-      # v3 instance) — each router needs its own explicit certresolver
-      # label or ACME never activates for it.
+      # default certResolver or domains (verified empirically against a
+      # live Traefik v3 instance) — once a router has any explicit tls.*
+      # field it stops inheriting entrypoint-level TLS defaults entirely.
+      # Without the domains labels below, each router would request its
+      # own individual cert (auto-derived from its own Host() rule)
+      # instead of reusing the shared wildcard.
       - "traefik.http.routers.kotaemon.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.kotaemon.tls.domains[0].main=${HARBOR_TRAEFIK_DOMAIN}"
+      - "traefik.http.routers.kotaemon.tls.domains[0].sans=*.${HARBOR_TRAEFIK_DOMAIN}"
       - "traefik.http.routers.kotaemon.service=kotaemon"
 
     networks:
