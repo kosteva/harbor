@@ -38,8 +38,14 @@ services:
         condition: service_completed_successfully
     networks:
       - traefik-public
-    labels:
-      - "traefik.enable=true"
+    # No traefik.enable label here on purpose: the dashboard is already
+    # exposed directly via api.insecure on its own dedicated `traefik`
+    # entrypoint (traefik.yml), independent of Docker-provider routing. An
+    # enable label with no entrypoints restriction previously made the
+    # docker provider auto-generate a phantom self-router on every
+    # entrypoint including websecure, using an auto-derived, dot-less
+    # hostname — harmless while no certResolver existed, but a hard ACME
+    # rejection ("Domain name needs at least one dot") once DNS-01 went live.
 
   # Init sidecar: ensures acme.json exists as a real file at 0600 before
   # traefik starts. Mirrors the pattern used for comfyui/swarmui.

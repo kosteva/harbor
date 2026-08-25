@@ -283,6 +283,9 @@
 - label: services/traefik/acme.json is gitignored (holds real private key material once ACME issues a certificate); its existence as a real file is guaranteed by harbor.sh on every invocation (Docker would otherwise auto-create a missing bind-mount file target as an empty directory instead, which can't be fixed from inside a container once mounted), and a traefik-init sidecar chmods it to 0600 before the main container starts, since Traefik refuses to use it for cert storage otherwise and git can't preserve that permission mode on checkout
   command: grep -q '^acme.json$' services/traefik/.gitignore && grep -q 'services/traefik/acme.json' harbor.sh && grep -q 'traefik-init' services/compose.traefik.yml && grep -q 'chmod 600 /acme.json' services/traefik/acme-init.sh
   tags: [spec, implemented]
+- label: the traefik service itself carries no traefik.enable label, since the dashboard is already exposed independently via api.insecure on its own dedicated entrypoint; an unrestricted enable label previously made the docker provider auto-generate a phantom self-router on every entrypoint including websecure, which failed ACME issuance for its dot-less auto-derived hostname once a default certResolver went live on websecure
+  command: ! grep -q 'traefik.enable=true' services/compose.traefik.yml
+  tags: [spec, implemented]
 
 ## drawio
 - label: drawio ollama overlay sets OLLAMA_BASE_URL to the native Ollama API root (${HARBOR_OLLAMA_INTERNAL_URL}/api) because next-ai-draw-io uses ollama-ai-provider (createOllama), which 404s against the OpenAI-compatible /v1 root
