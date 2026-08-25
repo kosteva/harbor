@@ -1094,6 +1094,45 @@
   command: grep -q 'HARBOR_USER_ID' services/compose.speaches.yml
   tags: [speaches-webui, implemented]
 
+# swarmui
+- swarmui wraps mcmonkeyprojects/SwarmUI, a modular AI image-generation web UI that installs and manages its own ComfyUI backend, as a Harbor frontend service built from source @spec @implemented
+- label: swarmui has a compose file at services/compose.swarmui.yml defining a swarmui service on the harbor network
+  command: test -f services/compose.swarmui.yml && grep -q 'harbor-network' services/compose.swarmui.yml
+  tags: [spec, implemented]
+- label: swarmui builds from source at HARBOR_SWARMUI_GIT_REF using launchtools/StandardDockerfile.docker, since no pre-built SwarmUI image is published upstream
+  command: grep -q 'HARBOR_SWARMUI_GIT_REF' services/compose.swarmui.yml && grep -q 'StandardDockerfile.docker' services/compose.swarmui.yml
+  tags: [spec, implemented]
+- label: swarmui installs its own ComfyUI backend with torch from the cu130 wheel index on first launch, giving RTX 50-series/Blackwell (sm_120) support that the frozen ghcr.io/ai-dock/comfyui image used by comfyui lacks
+  command: grep -qi 'sm_120\|Blackwell' 'docs/2.1.18-Frontend-SwarmUI.md'
+  tags: [spec, implemented]
+- label: swarmui publishes its web UI on container port 7801 via HARBOR_SWARMUI_HOST_PORT
+  command: grep -q 'HARBOR_SWARMUI_HOST_PORT' profiles/default.env && grep -q '7801' services/compose.swarmui.yml
+  tags: [spec, implemented]
+- label: swarmui runs as HARBOR_USER_ID:HARBOR_GROUP_ID with cap_drop ALL, and a swarmui-init sidecar chowns all bind mounts (Data, dlbackend, DLNodes, Extensions, Models, Output) to that uid/gid before the main container starts
+  command: grep -q 'cap_drop' services/compose.swarmui.yml && grep -q 'swarmui-init' services/compose.swarmui.yml && grep -q 'condition: service_completed_successfully' services/compose.swarmui.yml
+  tags: [spec, implemented]
+- label: swarmui has an nvidia overlay services/compose.x.swarmui.nvidia.yml and a generated CDI overlay services/compose.x.swarmui.cdi.yml; no ROCm overlay is provided since upstream disclaims AMD/Intel GPU support
+  command: test -f services/compose.x.swarmui.nvidia.yml && test -f services/compose.x.swarmui.cdi.yml && test ! -f services/compose.x.swarmui.rocm.yml
+  tags: [spec, implemented]
+- label: swarmui has a traefik cross-file routing to container port 7801, generated in the same format as seed-traefik.ts produces
+  command: test -f services/compose.x.traefik.swarmui.yml && grep -q 'loadbalancer.server.port=7801' services/compose.x.traefik.swarmui.yml
+  tags: [spec, implemented]
+- label: swarmui reads no environment variables for its own configuration (CLI args and Data/Settings.fds only), documented as such so harbor env swarmui is not expected to affect the service
+  command: grep -qi 'reads no environment variables\|no effect on the service' 'docs/2.1.18-Frontend-SwarmUI.md'
+  tags: [spec, implemented]
+- label: harbor ls includes swarmui and harbor eject swarmui resolves a valid compose configuration
+  command: ./harbor.sh ls | grep -q '^swarmui$'
+  tags: [spec, implemented]
+- label: run_swarmui_command exists in harbor.sh and is reachable from the main dispatch case, exposing args, models, output and workspace subcommands
+  command: grep -q 'run_swarmui_command()' harbor.sh && grep -qF 'run_swarmui_command "$@"' harbor.sh
+  tags: [spec, implemented]
+- label: swarmui's build sets BUILDKIT_CONTEXT_KEEP_GIT_DIR and injects safe.directory=* via GIT_CONFIG_* env vars, since BuildKit strips .git from remote-git contexts and the entrypoint's $HOME override otherwise hides the build-time git safe.directory config, both causing SwarmUI's own git-based startup check to fail
+  command: grep -q 'BUILDKIT_CONTEXT_KEEP_GIT_DIR' services/compose.swarmui.yml && grep -q 'GIT_CONFIG_KEY_0=safe.directory' services/compose.swarmui.yml
+  tags: [spec, implemented]
+- label: a macos capability (has_macos in harbor.sh, active on Darwin hosts) auto-applies services/compose.x.swarmui.macos.yml, which runs swarmui as root with capabilities restored, since Docker Desktop for Mac never applies chown to a non-root UID on bind mounts and swarmui-init can't satisfy SwarmUI's ownership check there; the Linux target is unaffected and keeps the non-root path
+  command: grep -q 'has_macos' harbor.sh && grep -q '"macos"' routines/utils.ts && test -f services/compose.x.swarmui.macos.yml && grep -q 'user: "0:0"' services/compose.x.swarmui.macos.yml
+  tags: [spec, implemented]
+
 # comfyui
 - label: comfyui has a ROCm overlay services/compose.x.comfyui.rocm.yml that mounts /dev/kfd and /dev/dri and switches the image to ghcr.io/ai-dock/comfyui:latest-rocm, auto-applied on ROCm hosts
   command: test -f services/compose.x.comfyui.rocm.yml && grep -q latest-rocm services/compose.x.comfyui.rocm.yml && grep -q /dev/kfd services/compose.x.comfyui.rocm.yml

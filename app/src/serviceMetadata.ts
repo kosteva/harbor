@@ -1129,4 +1129,12 @@ export const serviceMetadata: Record<string, Partial<HarborService>> = {
         wikiUrl: `${wikiUrl}/2.1.17-Frontend-Marinara`,
         tooltip: 'Local-first AI chat, roleplay, and game-master frontend with character cards, lorebooks, and BYOK model connections.',
     },
+    swarmui: {
+        name: 'SwarmUI',
+        tags: [HST.frontend, HST.image, HST.workflows],
+        projectUrl: 'https://github.com/mcmonkeyprojects/SwarmUI',
+        logo: 'https://github.com/mcmonkeyprojects.png?size=200',
+        wikiUrl: `${wikiUrl}/2.1.18-Frontend-SwarmUI`,
+        tooltip: 'Modular AI image generation web UI with a self-managed ComfyUI backend.',
+    },
 };

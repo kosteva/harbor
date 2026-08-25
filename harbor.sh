@@ -392,6 +392,7 @@ show_help() {
     echo "  mcp       - Configure MCP service"
     echo "  oterm     - Configure oterm service"
     echo "  marinara  - Configure Marinara Engine service"
+    echo "  swarmui   - Configure SwarmUI service"
     echo
     echo "Service CLIs:"
     echo "  ollama     - Run Ollama CLI (docker). Service should be running."
@@ -963,6 +964,15 @@ has_rocm() {
     return 0
 }
 
+# Docker Desktop for Mac's bind-mount layer doesn't propagate chown to a
+# non-root UID back to any container's view of the mount (confirmed: even
+# the chowning container's own subsequent stat sees uid/gid 0). Services
+# whose entrypoint hard-verifies bind-mount ownership before starting (e.g.
+# swarmui) need a macos-only overlay that runs them as root instead.
+has_macos() {
+    [[ "$(uname)" == "Darwin" ]]
+}
+
 has_modern_compose() {
     local compose_version_raw
     compose_version_raw=$(docker compose version --short 2>/dev/null | sed -e 's/-desktop//')
@@ -1142,6 +1152,10 @@ routine_compose_with_options() {
             options+=("rocm")
         fi
 
+        if has_macos; then
+            options+=("macos")
+        fi
+
         if has_modern_compose; then
             options+=("mdc")
         fi
@@ -1204,6 +1218,10 @@ compose_with_options() {
 
         if has_rocm; then
             options+=("rocm")
+        fi
+
+        if has_macos; then
+            options+=("macos")
         fi
 
         if has_modern_compose; then
@@ -4388,7 +4406,7 @@ _harbor_completions() {
     }
 
     # Top-level subcommands
-    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui marinara tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
+    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui marinara swarmui tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
 
     # Commands that accept service names as arguments
     local service_commands="up u start s down d logs log l build shell pull exec run stats attach cmd eject open o url qr launch dive env"
@@ -4693,6 +4711,7 @@ _harbor() {
         'npcsh:Run npcsh'
         'webui:Configure Open WebUI'
         'marinara:Configure Marinara Engine'
+        'swarmui:Configure SwarmUI'
         'tabbyapi:Configure TabbyAPI'
         'parllama:Launch Parllama'
         'oterm:Configure oterm'
@@ -5145,6 +5164,7 @@ complete -c harbor -n __harbor_no_subcommand -a mi -d 'Run mi agent'
 complete -c harbor -n __harbor_no_subcommand -a npcsh -d 'Run npcsh'
 complete -c harbor -n __harbor_no_subcommand -a webui -d 'Configure Open WebUI'
 complete -c harbor -n __harbor_no_subcommand -a marinara -d 'Configure Marinara Engine'
+complete -c harbor -n __harbor_no_subcommand -a swarmui -d 'Configure SwarmUI'
 complete -c harbor -n __harbor_no_subcommand -a tabbyapi -d 'Configure TabbyAPI'
 complete -c harbor -n __harbor_no_subcommand -a parllama -d 'Launch Parllama'
 complete -c harbor -n __harbor_no_subcommand -a oterm -d 'Configure oterm'
@@ -6289,7 +6309,7 @@ suggest_command() {
         stats attach cmd help --help -h hf defaults alias aliases a link ln
         unlink unln launch open o url qr list ls version --version -v smi top dive eject
         ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai
-        opencode facts mi npcsh webui marinara tabbyapi parllama oterm plandex pdx mistralrs
+        opencode facts mi npcsh webui marinara swarmui tabbyapi parllama oterm plandex pdx mistralrs
         interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai
         aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang
         jupyter ol1 ktransformers openhands oh stt speaches boost nexa
@@ -11107,6 +11127,47 @@ run_comfyui_command() {
     esac
 }
 
+run_swarmui_command() {
+    case "$1" in
+    args)
+        shift
+        env_manager_alias swarmui.args "$@"
+        ;;
+    models)
+        shift
+        env_manager_alias swarmui.models "$@"
+        ;;
+    output)
+        shift
+        execute_and_process "env_manager get swarmui.output" "sys_open {{output}}" "No swarmui.output set"
+        ;;
+    workspace)
+        shift
+        execute_and_process "env_manager get swarmui.workspace" "sys_open {{output}}" "No swarmui.workspace set"
+        ;;
+    -h | --help | help)
+        echo "Please note that this is not SwarmUI CLI, but a Harbor CLI to manage SwarmUI service."
+        echo
+        echo "Usage: harbor swarmui <command>"
+        echo
+        echo "Commands:"
+        echo "  harbor swarmui args [args]      - Get or set extra CLI args passed to SwarmUI's launch script"
+        echo "  harbor swarmui models [path]    - Get or set the host path mounted as SwarmUI's Models folder"
+        echo "  harbor swarmui output            - Open folder containing SwarmUI output in the File Manager"
+        echo "  harbor swarmui workspace         - Open folder containing SwarmUI's Data/dlbackend/extensions in the File Manager"
+        echo
+        echo "SwarmUI itself does not read environment variables for configuration (everything is a"
+        echo "CLI arg or Data/Settings.fds), so 'harbor env swarmui' has no effect on the service."
+        echo
+        echo "Note: no pre-built SwarmUI image is published upstream, so 'harbor build swarmui' must"
+        echo "be run on every host before 'harbor up swarmui' - the image bakes in the local UID."
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
 run_aichat_command() {
     case "$1" in
     model)
@@ -12785,6 +12846,10 @@ main_entrypoint() {
     marinara)
         shift
         run_marinara_command "$@"
+        ;;
+    swarmui)
+        shift
+        run_swarmui_command "$@"
         ;;
     tabbyapi)
         shift

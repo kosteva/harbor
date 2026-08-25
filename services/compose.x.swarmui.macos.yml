@@ -1,0 +1,17 @@
+services:
+  swarmui:
+    # Docker Desktop for Mac's bind-mount layer never applies a chown to a
+    # non-root UID (confirmed: even the chowning container's own subsequent
+    # stat reports uid/gid 0), so swarmui-init can never satisfy SwarmUI's
+    # entrypoint ownership check on this platform. Running as root sidesteps
+    # the check entirely ($EUID -eq 0 skips it) — harmless here since this
+    # only applies on macOS hosts, never the real (Linux) target.
+    user: "0:0"
+    # Harbor's compose merge unions cap_drop/cap_add arrays rather than
+    # replacing them, so the base file's cap_drop: [ALL] can't be cleared
+    # here — grant capabilities back instead. Without this, root still
+    # lacks CAP_DAC_OVERRIDE and can't write files baked into the image as
+    # the build-time UID (e.g. /SwarmUI/src, owned by HARBOR_USER_ID at
+    # build time), so `dotnet build` fails with Permission denied.
+    cap_add:
+      - ALL

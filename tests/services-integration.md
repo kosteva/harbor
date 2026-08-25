@@ -1127,6 +1127,28 @@ run container; `services/metamcp/data` (postgres), `services/mcp/cache` and
 `services/pipelines/persistent` (upload residue + `__pycache__`) become
 root-owned — alpine-rm before linting.
 
+## Group N — swarmui (optional; GPU, builds from source)
+
+No pre-built SwarmUI image is published upstream, so `harbor build swarmui`
+(dotnet build) runs before `up`, unlike every other group in this file. The
+container's ComfyUI backend install is a first-run **browser wizard** step,
+not scriptable via CLI/API, so this check only proves the web server itself
+starts and binds correctly — it does not exercise image generation or GPU
+backend selection. Excluded from `DEFAULT_GROUPS` for the same reason as
+Group E: the build/first-boot cost is much heavier than the rest of the
+suite.
+
+Start: `./harbor.sh build swarmui && ./harbor.sh up swarmui`
+
+### N1. swarmui
+
+- Ready: 200 probe on `$(./harbor.sh url swarmui)/` (≤300 s).
+- Function: `docker logs harbor.swarmui 2>&1 | grep -qi 'Now listening on'`
+  exits 0 — confirms the ASP.NET Kestrel listener bound successfully rather
+  than the container merely being Up.
+
+Teardown: `./harbor.sh down`
+
 ## Results
 
 Execution results are appended per run as:

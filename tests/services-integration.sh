@@ -11,7 +11,10 @@
 # default: the shipped image is CUDA-only — on a non-NVIDIA host the runner
 # applies the `--cpu` workaround, but it is opt-in via `--groups E`. Group J
 # (ROCm paths) is likewise opt-in via `--groups J` and self-skips on hosts
-# without an AMD GPU (/dev/kfd + renderD* + amdgpu module).
+# without an AMD GPU (/dev/kfd + renderD* + amdgpu module). Group N (swarmui)
+# is opt-in via `--groups N` — it builds SwarmUI from source (no pre-built
+# image exists upstream), a much heavier first-up cost than the rest of the
+# suite.
 #
 # Never uses `harbor logs` (tails forever) — uses `docker logs` when needed.
 # Prints one PASS/FAIL line per check plus a final summary; exits non-zero if
@@ -1821,6 +1824,24 @@ PYEOF
   teardown
 }
 
+group_N() {
+  log "Group N: swarmui (GPU-optional; builds from source, excluded by default)"
+  # No pre-built image is published upstream — build from source. This is a
+  # heavy dotnet build, unlike the pre-built-image services elsewhere in this
+  # file, so the group stays opt-in via --groups N like Group E (comfyui).
+  "$HARBOR" build swarmui >/dev/null 2>&1
+  "$HARBOR" up swarmui >/dev/null 2>&1
+
+  probe_200 "N1 swarmui ready" "$(svc_url swarmui)/" 300
+  if docker logs harbor.swarmui 2>&1 | grep -qi 'Now listening on'; then
+    record PASS "N1 swarmui ASP.NET listener bound"
+  else
+    record FAIL "N1 swarmui ASP.NET listener bound"
+  fi
+
+  teardown
+}
+
 list_groups() {
   cat <<'EOF'
 A  llamacpp webui boost litellm aichat   (llamacpp backend + OpenAI satellites)
@@ -1836,6 +1857,7 @@ J  llamacpp ollama lemonade localai voicebox vllm (ROCm paths; skipped on non-RO
 K  landing hollama mikupad mock-openai qdrant libretranslate netdata dbhub drawio sillytavern lobechat traefik marinara llamacpp (standalone web services + routed traefik)
 L  anythingllm sqlchat khoj perplexica ldr presenton aider opint oterm parllama (LLM frontends + CLIs)
 M  bifrost optillm litellm metamcp mcpo supergateway pipelines mcp-inspector (proxies/gateways/MCP; git builds on first up)
+N  swarmui                                (GPU-optional; excluded by default, builds from source)
 EOF
 }
 
@@ -1860,8 +1882,8 @@ main() {
   local g
   for g in $groups; do
     case "$g" in
-      A|B|C|D|E|F|G|H|I|J|K|L|M) ;;
-      *) echo "Unknown group: $g (valid: A-M)" >&2; exit 2 ;;
+      A|B|C|D|E|F|G|H|I|J|K|L|M|N) ;;
+      *) echo "Unknown group: $g (valid: A-N)" >&2; exit 2 ;;
     esac
   done
 

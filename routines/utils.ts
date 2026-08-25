@@ -3,7 +3,7 @@
 import process from "node:process";
 export { default as yaml } from "npm:yaml";
 
-export const BUILTIN_CAPS = ["nvidia", "mdc", "cdi", "rocm", "build"];
+export const BUILTIN_CAPS = ["nvidia", "mdc", "cdi", "rocm", "build", "macos"];
 export const CONFIG_PREFIX = "HARBOR_";
 export const LOG_LEVELS = ["debug", "info", "warn", "error"];
 
