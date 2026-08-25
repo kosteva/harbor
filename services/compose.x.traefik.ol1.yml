@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.ol1.loadbalancer.server.port=8501"
       - "traefik.http.routers.ol1.entrypoints=websecure"
       - "traefik.http.routers.ol1.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.ol1.tls.certresolver=letsencrypt"
       - "traefik.http.routers.ol1.service=ol1"
 
     networks:

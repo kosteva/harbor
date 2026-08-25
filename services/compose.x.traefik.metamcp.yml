@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.metamcp.loadbalancer.server.port=3000"
       - "traefik.http.routers.metamcp.entrypoints=websecure"
       - "traefik.http.routers.metamcp.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.metamcp.tls.certresolver=letsencrypt"
       - "traefik.http.routers.metamcp.service=metamcp"
 
     networks:

@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.openfang.loadbalancer.server.port=4200"
       - "traefik.http.routers.openfang.entrypoints=websecure"
       - "traefik.http.routers.openfang.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.openfang.tls.certresolver=letsencrypt"
       - "traefik.http.routers.openfang.service=openfang"
 
     networks:

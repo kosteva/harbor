@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.kobold.loadbalancer.server.port=5001"
       - "traefik.http.routers.kobold.entrypoints=websecure"
       - "traefik.http.routers.kobold.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.kobold.tls.certresolver=letsencrypt"
       - "traefik.http.routers.kobold.service=kobold"
 
     networks:

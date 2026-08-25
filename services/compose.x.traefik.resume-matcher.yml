@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.resume-matcher.loadbalancer.server.port=3000"
       - "traefik.http.routers.resume-matcher.entrypoints=websecure"
       - "traefik.http.routers.resume-matcher.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.resume-matcher.tls.certresolver=letsencrypt"
       - "traefik.http.routers.resume-matcher.service=resume-matcher"
 
     networks:

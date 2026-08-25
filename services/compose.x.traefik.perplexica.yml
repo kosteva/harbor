@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.perplexica.loadbalancer.server.port=3000"
       - "traefik.http.routers.perplexica.entrypoints=websecure"
       - "traefik.http.routers.perplexica.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.perplexica.tls.certresolver=letsencrypt"
       - "traefik.http.routers.perplexica.service=perplexica"
 
     networks:

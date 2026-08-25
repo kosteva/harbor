@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.tgi.loadbalancer.server.port=80"
       - "traefik.http.routers.tgi.entrypoints=websecure"
       - "traefik.http.routers.tgi.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.tgi.tls.certresolver=letsencrypt"
       - "traefik.http.routers.tgi.service=tgi"
 
     networks:

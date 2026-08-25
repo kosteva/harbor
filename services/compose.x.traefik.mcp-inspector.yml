@@ -8,6 +8,11 @@ services:
       - "traefik.http.services.mcp-inspector.loadbalancer.server.port=6274"
       - "traefik.http.routers.mcp-inspector.entrypoints=websecure"
       - "traefik.http.routers.mcp-inspector.tls=true"
+      # A router's tls=true does NOT inherit the websecure entrypoint's
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it.
+      - "traefik.http.routers.mcp-inspector.tls.certresolver=letsencrypt"
       - "traefik.http.routers.mcp-inspector.service=mcp-inspector"
 
     networks:

@@ -1,3 +1,15 @@
+# NOT MOUNTED / NOT READ BY THE CONTAINER. Kept only as a readable reference
+# for what services/compose.traefik.yml's `environment:` block expresses —
+# that env block is the actual, live source of truth.
+#
+# Why: Traefik stops accepting brand-new top-level static-config sections
+# from environment variables the moment ANY file is mounted at
+# /etc/traefik/traefik.yml, regardless of the file's content (verified
+# empirically). Since the domain used for the DNS-01 wildcard cert
+# (entryPoints.websecure.http.tls.domains) is genuinely per-user and this
+# file can't do ${VAR} interpolation anyway (bind-mounted raw, no envsubst),
+# keeping a file mounted here at all would permanently break that config —
+# so nothing mounts this file.
 api:
   dashboard: true
   insecure: true
@@ -26,10 +38,6 @@ providers:
     exposedByDefault: false
     network: harbor_traefik-public
 
-# Let's Encrypt (DNS-01 / deSEC). Domain/email are genuinely per-user, so
-# those stay in compose.traefik.yml's `environment:` (this file can't do
-# ${VAR} interpolation — bind-mounted raw, no envsubst) and get merged in by
-# Traefik at runtime alongside this static block.
 certificatesResolvers:
   letsencrypt:
     acme:
