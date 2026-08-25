@@ -1,15 +1,3 @@
-# NOT MOUNTED / NOT READ BY THE CONTAINER. Kept only as a readable reference
-# for what services/compose.traefik.yml's `environment:` block expresses —
-# that env block is the actual, live source of truth.
-#
-# Why: Traefik stops accepting brand-new top-level static-config sections
-# from environment variables the moment ANY file is mounted at
-# /etc/traefik/traefik.yml, regardless of the file's content (verified
-# empirically). Since the domain used for the DNS-01 wildcard cert
-# (entryPoints.websecure.http.tls.domains) is genuinely per-user and this
-# file can't do ${VAR} interpolation anyway (bind-mounted raw, no envsubst),
-# keeping a file mounted here at all would permanently break that config —
-# so nothing mounts this file.
 api:
   dashboard: true
   insecure: true
@@ -24,9 +12,6 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
-    http:
-      tls:
-        certResolver: letsencrypt
   traefik:
     address: ":8080"
   metrics:
@@ -38,9 +23,18 @@ providers:
     exposedByDefault: false
     network: harbor_traefik-public
 
+# Let's Encrypt (DNS-01 / deSEC). One cert per service (no wildcard): each
+# router carries its own tls.certresolver=letsencrypt label
+# (.scripts/seed-traefik.ts) — a router's tls=true alone does not activate
+# ACME on its own, verified empirically against a live Traefik v3 instance.
+#
+# The email below can't be a Harbor config var — this file is bind-mounted
+# raw, no envsubst step exists for it. Edit it directly if you want ACME
+# expiry notices sent somewhere other than the placeholder address.
 certificatesResolvers:
   letsencrypt:
     acme:
+      email: "harbor@harbor.sh"
       storage: /acme.json
       dnsChallenge:
         provider: desec

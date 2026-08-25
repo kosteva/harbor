@@ -6,40 +6,11 @@ services:
       - ./.env
       - ./services/traefik/override.env
     environment:
-      # All of Traefik's static config lives here now, not in traefik.yml.
-      # Verified empirically: once ANY file is mounted at
-      # /etc/traefik/traefik.yml, Traefik stops accepting brand-new
-      # top-level config sections from env vars at all (not a per-field or
-      # per-key merge — env vars can only override values that already
-      # exist in the file). Since a file was always mounted here, the
-      # env-only entryPoints.websecure.http.tls.domains added in an earlier
-      # version of this file was silently dropped every time, leaving ACME
-      # fully dormant (no eager domains + no live traffic yet = the
-      # otherwise-lazy resolver never activates — zero log output). Moving
-      # everything to env and dropping the file mount fixes this.
-      - TRAEFIK_API_DASHBOARD=true
-      - TRAEFIK_API_INSECURE=true
-      - TRAEFIK_PROVIDERS_DOCKER_ENDPOINT=unix:///var/run/docker.sock
-      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
-      - TRAEFIK_PROVIDERS_DOCKER_NETWORK=harbor_traefik-public
-      - TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=:80
-      - TRAEFIK_ENTRYPOINTS_WEB_HTTP_REDIRECTIONS_ENTRYPOINT_TO=websecure
-      - TRAEFIK_ENTRYPOINTS_WEB_HTTP_REDIRECTIONS_ENTRYPOINT_SCHEME=https
-      - TRAEFIK_ENTRYPOINTS_WEBSECURE_ADDRESS=:443
-      - TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_CERTRESOLVER=letsencrypt
-      # Wildcard: one cert for the whole domain instead of one per service.
-      # SANS (no trailing _0) is a single value here, not an indexed list —
-      # verified against a live Traefik instance.
-      - TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_MAIN=${HARBOR_TRAEFIK_DOMAIN}
-      - TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_SANS=*.${HARBOR_TRAEFIK_DOMAIN}
-      - TRAEFIK_ENTRYPOINTS_TRAEFIK_ADDRESS=:8080
-      - TRAEFIK_ENTRYPOINTS_METRICS_ADDRESS=:8082
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${HARBOR_TRAEFIK_CERT_EMAIL}
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE=/acme.json
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=desec
       # DESEC_TOKEN/DESEC_PROPAGATION_TIMEOUT are lego-only — no Traefik
       # config field for them at all, lego reads DNS-provider env vars
-      # directly regardless of how the rest of static config is delivered.
+      # directly. Everything else Traefik-related lives in traefik.yml
+      # (mounted below); it doesn't need per-user values now that certs are
+      # one-per-service rather than a wildcard, so it stays a plain file.
       - DESEC_TOKEN=${HARBOR_TRAEFIK_DESEC_TOKEN}
       - DESEC_PROPAGATION_TIMEOUT=${HARBOR_TRAEFIK_DESEC_PROPAGATION_TIMEOUT}
     ports:
@@ -49,6 +20,7 @@ services:
       - ${HARBOR_TRAEFIK_DASHBOARD_HOST_PORT}:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${HARBOR_TRAEFIK_CONFIG}:/etc/traefik/traefik.yml:ro
       - ./services/traefik/acme.json:/acme.json:rw # For Let's Encrypt certificates
     # Wait for the init sidecar to fix up acme.json's permissions — Traefik
     # refuses to use it for cert storage otherwise ("permissions ... are too
@@ -60,12 +32,12 @@ services:
       - traefik-public
     # No traefik.enable label here on purpose: the dashboard is already
     # exposed directly via api.insecure on its own dedicated `traefik`
-    # entrypoint (above), independent of Docker-provider routing. An enable
-    # label with no entrypoints restriction previously made the docker
-    # provider auto-generate a phantom self-router on every entrypoint
-    # including websecure, using an auto-derived, dot-less hostname —
-    # harmless while no certResolver existed, but a hard ACME rejection
-    # ("Domain name needs at least one dot") once DNS-01 went live.
+    # entrypoint (traefik.yml), independent of Docker-provider routing. An
+    # enable label with no entrypoints restriction previously made the
+    # docker provider auto-generate a phantom self-router on every
+    # entrypoint including websecure, using an auto-derived, dot-less
+    # hostname — harmless while no certResolver existed, but a hard ACME
+    # rejection ("Domain name needs at least one dot") once DNS-01 went live.
 
   # Init sidecar: ensures acme.json exists as a real file at 0600 before
   # traefik starts. Mirrors the pattern used for comfyui/swarmui.

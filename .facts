@@ -271,17 +271,14 @@
   tags: [spec, services-it, implemented]
 
 ## traefik
-- label: traefik's entire static configuration (api, providers.docker, all entryPoints, certificatesResolvers) is delivered via TRAEFIK_* environment variables in compose.traefik.yml, with no file mounted at /etc/traefik/traefik.yml; Traefik stops accepting new top-level static-config sections from env vars the moment any file is mounted there regardless of its content, so a config file and env-driven config are mutually exclusive
-  command: ! grep -q 'traefik.yml:/etc/traefik/traefik.yml' services/compose.traefik.yml && grep -q 'TRAEFIK_PROVIDERS_DOCKER_ENDPOINT=' services/compose.traefik.yml
+- label: traefik.config default is ./services/traefik/traefik.yml, mounted read-only into the container and the live source of truth for api, providers.docker, entryPoints, and the Let's Encrypt certificatesResolvers block; none of it needs to vary per-user with one-certificate-per-service, so it stays a plain file instead of an environment-variable block
+  command: grep -q 'HARBOR_TRAEFIK_CONFIG="./services/traefik/traefik.yml"' profiles/default.env && grep -q 'HARBOR_TRAEFIK_CONFIG}:/etc/traefik/traefik.yml' services/compose.traefik.yml
+  tags: [services-it, implemented]
+- label: traefik supports Let's Encrypt DNS-01 via deSEC (services/traefik/traefik.yml); DESEC_TOKEN and DESEC_PROPAGATION_TIMEOUT reach it via environment variables in compose.traefik.yml since lego reads DNS-provider credentials exclusively from the process environment, never from Traefik's own config, regardless of how the rest of static config is delivered
+  command: grep -q 'provider: desec' services/traefik/traefik.yml && grep -q 'DESEC_TOKEN=' services/compose.traefik.yml
   tags: [spec, implemented]
-- label: traefik supports Let's Encrypt DNS-01 via deSEC; DESEC_TOKEN and the per-user domain/email reach it via environment variables in compose.traefik.yml (lego reads DNS-provider credentials exclusively from process env, never from Traefik's config)
-  command: grep -q 'TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_DNSCHALLENGE_PROVIDER=desec' services/compose.traefik.yml && grep -q 'DESEC_TOKEN=' services/compose.traefik.yml
-  tags: [spec, implemented]
-- label: traefik requests a single wildcard certificate for *.HARBOR_TRAEFIK_DOMAIN plus the bare domain via the websecure entrypoint's default TLS domains (env-injected from compose.traefik.yml); DOMAINS_0_SANS (no trailing _0) is a single value, not an indexed list, despite the plural name
-  command: grep -q 'TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_SANS=\*' services/compose.traefik.yml
-  tags: [spec, implemented]
-- label: every generated compose.x.traefik.<service>.yml router carries its own explicit tls.certresolver and tls.domains labels matching the wildcard; a router's tls=true alone does not inherit any websecure entrypoint TLS defaults once it has any explicit tls.* field (verified empirically against a live Traefik v3 instance) — without an explicit tls.domains label each router would request its own individual certificate auto-derived from its Host() rule instead of reusing the shared wildcard
-  command: grep -q 'tls.certresolver=letsencrypt' .scripts/seed-traefik.ts && grep -q 'tls.domains\[0\].main' .scripts/seed-traefik.ts && grep -q 'tls.domains\[0\].sans=' .scripts/seed-traefik.ts && grep -q 'tls.domains\[0\].main' services/compose.x.traefik.webui.yml
+- label: every generated compose.x.traefik.<service>.yml router carries its own explicit tls.certresolver=letsencrypt label; a router's tls=true alone does not activate ACME on its own (verified empirically against a live Traefik v3 instance — it silently just serves the self-signed default cert). Each service gets its own individual certificate, issued on demand, rather than a shared wildcard
+  command: grep -q 'tls.certresolver=letsencrypt' .scripts/seed-traefik.ts && grep -q 'tls.certresolver=letsencrypt' services/compose.x.traefik.webui.yml && ! grep -q '"traefik.http.routers.webui.tls.domains' services/compose.x.traefik.webui.yml
   tags: [spec, implemented]
 - label: services/traefik/acme.json is gitignored (holds real private key material once ACME issues a certificate); its existence as a real file is guaranteed by harbor.sh on every invocation (Docker would otherwise auto-create a missing bind-mount file target as an empty directory instead, which can't be fixed from inside a container once mounted), and a traefik-init sidecar chmods it to 0600 before the main container starts, since Traefik refuses to use it for cert storage otherwise and git can't preserve that permission mode on checkout
   command: grep -q '^acme.json$' services/traefik/.gitignore && grep -q 'services/traefik/acme.json' harbor.sh && grep -q 'traefik-init' services/compose.traefik.yml && grep -q 'chmod 600 /acme.json' services/traefik/acme-init.sh

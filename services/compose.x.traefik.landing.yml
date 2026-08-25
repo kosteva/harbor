@@ -9,15 +9,12 @@ services:
       - "traefik.http.routers.landing.entrypoints=websecure"
       - "traefik.http.routers.landing.tls=true"
       # A router's tls=true does NOT inherit the websecure entrypoint's
-      # default certResolver or domains (verified empirically against a
-      # live Traefik v3 instance) — once a router has any explicit tls.*
-      # field it stops inheriting entrypoint-level TLS defaults entirely.
-      # Without the domains labels below, each router would request its
-      # own individual cert (auto-derived from its own Host() rule)
-      # instead of reusing the shared wildcard.
+      # default certResolver (verified empirically against a live Traefik
+      # v3 instance) — each router needs its own explicit certresolver
+      # label or ACME never activates for it. No tls.domains label: this
+      # gets each service its own individual certificate, auto-derived
+      # from its own Host() rule (Traefik's default behavior).
       - "traefik.http.routers.landing.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.landing.tls.domains[0].main=${HARBOR_TRAEFIK_DOMAIN}"
-      - "traefik.http.routers.landing.tls.domains[0].sans=*.${HARBOR_TRAEFIK_DOMAIN}"
       - "traefik.http.routers.landing.service=landing"
 
     networks:
