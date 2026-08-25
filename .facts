@@ -280,8 +280,8 @@
 - label: traefik requests a single wildcard certificate for *.HARBOR_TRAEFIK_DOMAIN plus the bare domain via the websecure entrypoint's default TLS domains (env-injected from compose.traefik.yml), so every existing tls=true router (all generated compose.x.traefik.*.yml files) reuses it with no per-router certresolver label needed
   command: grep -q 'TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_SANS_0=\*' services/compose.traefik.yml
   tags: [spec, implemented]
-- label: services/traefik/acme.json is gitignored (holds real private key material once ACME issues a certificate) and kept at 0600 permissions, which Traefik requires for cert storage
-  command: grep -q '^acme.json$' services/traefik/.gitignore && test "$(stat -f '%A' services/traefik/acme.json 2>/dev/null || stat -c '%a' services/traefik/acme.json)" = "600"
+- label: services/traefik/acme.json is gitignored (holds real private key material once ACME issues a certificate); its existence as a real file is guaranteed by harbor.sh on every invocation (Docker would otherwise auto-create a missing bind-mount file target as an empty directory instead, which can't be fixed from inside a container once mounted), and a traefik-init sidecar chmods it to 0600 before the main container starts, since Traefik refuses to use it for cert storage otherwise and git can't preserve that permission mode on checkout
+  command: grep -q '^acme.json$' services/traefik/.gitignore && grep -q 'services/traefik/acme.json' harbor.sh && grep -q 'traefik-init' services/compose.traefik.yml && grep -q 'chmod 600 /acme.json' services/traefik/acme-init.sh
   tags: [spec, implemented]
 
 ## drawio

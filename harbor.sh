@@ -12372,6 +12372,16 @@ esac
 if ! ensure_env_file; then
     exit 1
 fi
+# Docker auto-creates a missing bind-mount *file* target as an empty
+# directory instead, which breaks Traefik's acme.json cert storage and can't
+# be fixed from inside a container once the mount exists (the mount point
+# itself is "busy"). Guarantee it's a real file on the host before any
+# compose invocation gets the chance to bind-mount it as a directory.
+if [ ! -f "$harbor_home/services/traefik/acme.json" ]; then
+    rm -rf "$harbor_home/services/traefik/acme.json" 2>/dev/null
+    mkdir -p "$harbor_home/services/traefik"
+    touch "$harbor_home/services/traefik/acme.json"
+fi
 # Current user ID - FS + UIDs for containers (where applicable)
 env_manager --silent set user.id "$(id -u)"
 env_manager --silent set group.id "$(id -g)"

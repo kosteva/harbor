@@ -30,10 +30,31 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${HARBOR_TRAEFIK_CONFIG}:/etc/traefik/traefik.yml:ro
       - ./services/traefik/acme.json:/acme.json:rw # For Let's Encrypt certificates
+    # Wait for the init sidecar to fix up acme.json's permissions — Traefik
+    # refuses to use it for cert storage otherwise ("permissions ... are too
+    # open, please use 600").
+    depends_on:
+      traefik-init:
+        condition: service_completed_successfully
     networks:
       - traefik-public
     labels:
       - "traefik.enable=true"
+
+  # Init sidecar: ensures acme.json exists as a real file at 0600 before
+  # traefik starts. Mirrors the pattern used for comfyui/swarmui.
+  traefik-init:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.traefik-init
+    image: alpine:3.20
+    env_file:
+      - ./.env
+      - ./services/traefik/override.env
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes:
+      - ./services/traefik/acme-init.sh:/init.sh:ro
+      - ./services/traefik/acme.json:/acme.json:rw
+    networks:
+      - traefik-public
 
 networks:
   traefik-public:
