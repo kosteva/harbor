@@ -5,6 +5,22 @@ services:
     env_file:
       - ./.env
       - ./services/traefik/override.env
+    environment:
+      # The DNS-01/deSEC resolver itself (storage path, provider, certResolver
+      # reference) is real YAML in traefik.yml now — those are constants, no
+      # reason to route them through env vars. Only what's genuinely per-user
+      # or credential-only lives here: DESEC_TOKEN/DESEC_PROPAGATION_TIMEOUT
+      # are lego-only (no YAML equivalent — lego reads DNS-provider env vars
+      # directly, never via Traefik's config), and domain/email are kept as
+      # env vars to match the single source of truth every other service's
+      # router Host() rule already uses (HARBOR_TRAEFIK_DOMAIN), rather than
+      # duplicating the literal domain into traefik.yml too.
+      - DESEC_TOKEN=${HARBOR_TRAEFIK_DESEC_TOKEN}
+      - DESEC_PROPAGATION_TIMEOUT=${HARBOR_TRAEFIK_DESEC_PROPAGATION_TIMEOUT}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${HARBOR_TRAEFIK_CERT_EMAIL}
+      # Wildcard: one cert for the whole domain instead of one per service.
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_MAIN=${HARBOR_TRAEFIK_DOMAIN}
+      - TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_SANS_0=*.${HARBOR_TRAEFIK_DOMAIN}
     ports:
       - ${HARBOR_TRAEFIK_HOST_PORT}:80
       - ${HARBOR_TRAEFIK_HTTPS_HOST_PORT}:443

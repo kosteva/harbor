@@ -12,6 +12,9 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
   traefik:
     address: ":8080"
   metrics:
@@ -23,10 +26,13 @@ providers:
     exposedByDefault: false
     network: harbor_traefik-public
 
-# certificatesResolvers:
-#   letsencrypt:
-#     acme:
-#       email: "${HARBOR_TRAEFIK_CERT_EMAIL:-harbor@harbor.sh}"
-#       storage: acme.json
-#       httpChallenge:
-#         entryPoint: web
+# Let's Encrypt (DNS-01 / deSEC). Domain/email are genuinely per-user, so
+# those stay in compose.traefik.yml's `environment:` (this file can't do
+# ${VAR} interpolation — bind-mounted raw, no envsubst) and get merged in by
+# Traefik at runtime alongside this static block.
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      storage: /acme.json
+      dnsChallenge:
+        provider: desec

@@ -274,6 +274,15 @@
 - label: traefik.config default is ./services/traefik/traefik.yml so the compose bind mount resolves to the shipped config (repo-root-relative convention)
   command: grep -q 'HARBOR_TRAEFIK_CONFIG="./services/traefik/traefik.yml"' profiles/default.env
   tags: [services-it, implemented]
+- label: traefik supports Let's Encrypt DNS-01 via deSEC; the resolver's constant fields (storage path, dnsChallenge provider, the websecure entrypoint's certResolver reference) are plain YAML in services/traefik/traefik.yml, while DESEC_TOKEN and the per-user domain/email reach it via environment variables in compose.traefik.yml (lego reads DNS-provider credentials exclusively from process env, never from Traefik's YAML)
+  command: grep -q 'provider: desec' services/traefik/traefik.yml && grep -q 'certResolver: letsencrypt' services/traefik/traefik.yml && grep -q 'DESEC_TOKEN=' services/compose.traefik.yml
+  tags: [spec, implemented]
+- label: traefik requests a single wildcard certificate for *.HARBOR_TRAEFIK_DOMAIN plus the bare domain via the websecure entrypoint's default TLS domains (env-injected from compose.traefik.yml), so every existing tls=true router (all generated compose.x.traefik.*.yml files) reuses it with no per-router certresolver label needed
+  command: grep -q 'TRAEFIK_ENTRYPOINTS_WEBSECURE_HTTP_TLS_DOMAINS_0_SANS_0=\*' services/compose.traefik.yml
+  tags: [spec, implemented]
+- label: services/traefik/acme.json is gitignored (holds real private key material once ACME issues a certificate) and kept at 0600 permissions, which Traefik requires for cert storage
+  command: grep -q '^acme.json$' services/traefik/.gitignore && test "$(stat -f '%A' services/traefik/acme.json 2>/dev/null || stat -c '%a' services/traefik/acme.json)" = "600"
+  tags: [spec, implemented]
 
 ## drawio
 - label: drawio ollama overlay sets OLLAMA_BASE_URL to the native Ollama API root (${HARBOR_OLLAMA_INTERNAL_URL}/api) because next-ai-draw-io uses ollama-ai-provider (createOllama), which 404s against the OpenAI-compatible /v1 root
