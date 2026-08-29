@@ -511,6 +511,45 @@
   command: grep -q 'profile:(.+)' services/voicebox/openai/app.js && grep -q 'DEFAULT_VOICE' services/voicebox/openai/app.js
   tags: [spec, implemented]
 
+## iib
+- iib wraps PBandDev/infinite-image-browser-docker, a fast search/browse UI over generated images and videos backed by zanllp/infinite-image-browsing, as a Harbor frontend service using its prebuilt GHCR image @spec @implemented
+- label: iib has a compose file at services/compose.iib.yml defining an iib service on the harbor network
+  command: test -f services/compose.iib.yml && grep -q 'harbor-network' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib runs the prebuilt ghcr.io/pbanddev/infinite-image-browser-docker image pinned to linux/amd64, since no arm64 manifest is published
+  command: grep -q 'HARBOR_IIB_IMAGE' profiles/default.env && grep -q 'ghcr.io/pbanddev/infinite-image-browser-docker' profiles/default.env && grep -q 'platform: linux/amd64' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib publishes its web UI on container port 8080 via HARBOR_IIB_HOST_PORT
+  command: grep -q 'HARBOR_IIB_HOST_PORT' profiles/default.env && grep -q ':8080' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib persists its index database and thumbnail cache at HARBOR_IIB_CACHE mounted to /cache; no ownership init sidecar is used since the upstream image runs as root and would overwrite any pre-chowned ownership on its own writes
+  command: grep -q 'HARBOR_IIB_CACHE' profiles/default.env && grep -q '/cache' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib mounts every browse root read-only under /outputs/<label>, since the image's baked config.json points all indexed SD outdirs at /outputs and only that tree is searchable
+  command: grep -q '/outputs/swarmui:ro' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib pre-seeds HARBOR_SWARMUI_OUTPUT as the /outputs/swarmui browse root by default, with no other paths mounted until added
+  command: grep -q 'HARBOR_SWARMUI_OUTPUT.*outputs/swarmui' services/compose.iib.yml
+  tags: [spec, implemented]
+- label: iib has a traefik cross-file routing to container port 8080, generated in the same format as seed-traefik.ts produces
+  command: test -f services/compose.x.traefik.iib.yml && grep -q 'loadbalancer.server.port=8080' services/compose.x.traefik.iib.yml
+  tags: [spec, implemented]
+- label: harbor ls includes iib and harbor up iib resolves a valid compose configuration
+  command: ./harbor.sh ls | grep -q '^iib$'
+  tags: [spec, implemented]
+- label: run_iib_command exists in harbor.sh and is reachable from the main dispatch case, exposing paths, version, image, args, secret and cache subcommands
+  command: grep -q 'run_iib_command()' harbor.sh && grep -qF 'run_iib_command "$@"' harbor.sh
+  tags: [spec, implemented]
+- label: harbor iib paths add canonicalizes the given directory to an absolute path, rejects paths that do not exist on disk, and rejects a duplicate or reserved (swarmui) label, before appending <path>:/outputs/<label>:ro to HARBOR_IIB_VOLUMES via env_manager_arr
+  command: grep -q 'iib.volumes' harbor.sh && grep -q 'run_iib_paths_command' harbor.sh
+  tags: [spec, implemented]
+- label: iib has metadata (name, tags, wikiUrl) registered in app/src/serviceMetadata.ts
+  command: grep -q 'iib:' app/src/serviceMetadata.ts
+  tags: [spec, implemented]
+- label: iib has a documentation page at docs/2.1.19-Frontend-IIB.md covering env vars, the harbor iib paths CLI, the indexed-vs-browse-only distinction, and the amd64 emulation caveat
+  command: test -f docs/2.1.19-Frontend-IIB.md
+  tags: [spec, implemented]
+
 # app
 - label: Harbor App blocks main UI behind a setup gate until setup detail status is ready
   command: rg -q 'detail\?\.status === "ready"' app/src/setup/HarborSetupContext.tsx

@@ -1137,4 +1137,12 @@ export const serviceMetadata: Record<string, Partial<HarborService>> = {
         wikiUrl: `${wikiUrl}/2.1.18-Frontend-SwarmUI`,
         tooltip: 'Modular AI image generation web UI with a self-managed ComfyUI backend.',
     },
+    iib: {
+        name: 'Infinite Image Browsing',
+        tags: [HST.frontend, HST.image, HST.tools],
+        projectUrl: 'https://github.com/zanllp/infinite-image-browsing',
+        logo: 'https://github.com/zanllp.png?size=200',
+        wikiUrl: `${wikiUrl}/2.1.19-Frontend-IIB`,
+        tooltip: 'Fast browser and search UI for generated images and videos.',
+    },
 };

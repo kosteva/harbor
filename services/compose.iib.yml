@@ -1,0 +1,29 @@
+services:
+  iib:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.iib
+    image: ${HARBOR_IIB_IMAGE}:${HARBOR_IIB_VERSION}
+    # The GHCR image publishes linux/amd64 only (no arm64 manifest); the pin
+    # makes Apple Silicon run it under emulation instead of failing the pull.
+    # No-op on amd64 hosts.
+    platform: linux/amd64
+    env_file:
+      - ./.env
+      - ./services/iib/override.env
+    environment:
+      - PORT=8080
+      - EXTRA_PATHS=/outputs
+      - IIB_CACHE_DIR=/cache
+      - IIB_DB_PATH=/cache/iib.db
+      - IIB_SECRET_KEY=${HARBOR_IIB_SECRET_KEY}
+      - IIB_SERVER_LANG=${HARBOR_IIB_SERVER_LANG}
+      - EXTRA_OPTIONS=${HARBOR_IIB_ARGS}
+    ports:
+      - ${HARBOR_IIB_HOST_PORT}:8080
+    volumes:
+      # Default browse root. `harbor iib paths add` mounts additional roots
+      # under /outputs/<label>; only paths under /outputs are indexed and
+      # therefore searchable (--extra_paths roots are browse-only).
+      - ${HARBOR_SWARMUI_OUTPUT}:/outputs/swarmui:ro
+      - ${HARBOR_IIB_CACHE}:/cache
+    networks:
+      - harbor-network

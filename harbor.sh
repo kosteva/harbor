@@ -393,6 +393,7 @@ show_help() {
     echo "  oterm     - Configure oterm service"
     echo "  marinara  - Configure Marinara Engine service"
     echo "  swarmui   - Configure SwarmUI service"
+    echo "  iib       - Configure Infinite Image Browsing service"
     echo
     echo "Service CLIs:"
     echo "  ollama     - Run Ollama CLI (docker). Service should be running."
@@ -4406,7 +4407,7 @@ _harbor_completions() {
     }
 
     # Top-level subcommands
-    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui marinara swarmui tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
+    local commands="up u start s down d restart r ps build shell logs log l pull exec run stats attach cmd help hf defaults alias aliases a link ln unlink unln launch open o url qr list ls version smi top dive eject config profile profiles p gum fixfs info update how find home vscode doctor bench history h size env dev tools eval routine volumes skills completion models tokscale tunnel t tunnels migrate modularmax ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai opencode facts mi npcsh webui marinara swarmui iib tabbyapi parllama oterm plandex pdx mistralrs interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang jupyter ol1 ktransformers openhands oh stt speaches boost nexa repopack k6 promptfoo pf webtop langflow kobold morphic gptme hermes mcp openfang"
 
     # Commands that accept service names as arguments
     local service_commands="up u start s down d logs log l build shell pull exec run stats attach cmd eject open o url qr launch dive env"
@@ -4712,6 +4713,7 @@ _harbor() {
         'webui:Configure Open WebUI'
         'marinara:Configure Marinara Engine'
         'swarmui:Configure SwarmUI'
+        'iib:Configure Infinite Image Browsing'
         'tabbyapi:Configure TabbyAPI'
         'parllama:Launch Parllama'
         'oterm:Configure oterm'
@@ -5165,6 +5167,7 @@ complete -c harbor -n __harbor_no_subcommand -a npcsh -d 'Run npcsh'
 complete -c harbor -n __harbor_no_subcommand -a webui -d 'Configure Open WebUI'
 complete -c harbor -n __harbor_no_subcommand -a marinara -d 'Configure Marinara Engine'
 complete -c harbor -n __harbor_no_subcommand -a swarmui -d 'Configure SwarmUI'
+complete -c harbor -n __harbor_no_subcommand -a iib -d 'Configure Infinite Image Browsing'
 complete -c harbor -n __harbor_no_subcommand -a tabbyapi -d 'Configure TabbyAPI'
 complete -c harbor -n __harbor_no_subcommand -a parllama -d 'Launch Parllama'
 complete -c harbor -n __harbor_no_subcommand -a oterm -d 'Configure oterm'
@@ -6309,7 +6312,7 @@ suggest_command() {
         stats attach cmd help --help -h hf defaults alias aliases a link ln
         unlink unln launch open o url qr list ls version --version -v smi top dive eject
         ollama llamacpp ikllamacpp tgi litellm vllm dmr mlx omlx aphrodite openai
-        opencode facts mi npcsh webui marinara swarmui tabbyapi parllama oterm plandex pdx mistralrs
+        opencode facts mi npcsh webui marinara swarmui iib tabbyapi parllama oterm plandex pdx mistralrs
         interpreter opint cfd cloudflared cmdh fabric parler photoprism airllm txtai
         aider nanobot chatui comfyui aichat omnichain lmeval lm_eval sglang
         jupyter ol1 ktransformers openhands oh stt speaches boost nexa
@@ -11127,6 +11130,157 @@ run_comfyui_command() {
     esac
 }
 
+run_iib_paths_command() {
+    local reserved_label="swarmui"
+
+    _iib_slugify() {
+        local s
+        s=$(harbor_lower "$1" | tr -c 'a-z0-9' '-')
+        s="${s##-}"
+        s="${s%%-}"
+        # Collapse repeated hyphens left by tr
+        while [[ "$s" == *--* ]]; do s="${s//--/-}"; done
+        printf '%s' "$s"
+    }
+
+    case "$1" in
+    ls | list | "")
+        env_manager get iib.volumes | tr ';' '\n' | while read -r vol; do
+            [ -z "$vol" ] && continue
+            local src="${vol%%:*}"
+            local rest="${vol#*:}"
+            local dest="${rest%:ro}"
+            local label="${dest#/outputs/}"
+            echo "$label -> $src"
+        done
+        if [ -z "$(env_manager --silent get iib.volumes)" ]; then
+            log_info "No custom paths configured (the default swarmui output is always mounted)"
+        fi
+        ;;
+    add)
+        local dir="$2"
+        local label="$3"
+        if [ -z "$dir" ]; then
+            echo "Usage: harbor iib paths add <directory> [label]"
+            return 1
+        fi
+        # Expand a literal leading ~ in case it reached us quoted/unexpanded
+        dir="${dir/#\~/$HOME}"
+        if [ ! -d "$dir" ]; then
+            log_error "Not a directory: $dir"
+            return 1
+        fi
+        local abs_dir
+        abs_dir=$(_portable_realpath "$dir")
+        if [ -z "$label" ]; then
+            label=$(_iib_slugify "$(basename "$abs_dir")")
+        else
+            label=$(_iib_slugify "$label")
+        fi
+        if [ -z "$label" ]; then
+            log_error "Could not derive a usable label from '$dir' - pass one explicitly"
+            return 1
+        fi
+        if [ "$label" = "$reserved_label" ]; then
+            log_error "Label '$reserved_label' is reserved for the built-in SwarmUI output mount"
+            return 1
+        fi
+        if env_manager get iib.volumes | tr ';' '\n' | grep -q ":/outputs/${label}:ro$"; then
+            log_error "Label '$label' is already in use, run 'harbor iib paths rm $label' first or pick another label"
+            return 1
+        fi
+        env_manager_arr iib.volumes add "${abs_dir}:/outputs/${label}:ro"
+        log_info "Added '$label' -> $abs_dir. Run 'harbor restart iib' to pick it up."
+        ;;
+    rm | remove)
+        local target="$2"
+        if [ -z "$target" ]; then
+            echo "Usage: harbor iib paths rm <label|index>"
+            return 1
+        fi
+        # Numeric index: pass straight through to env_manager_arr
+        if [[ "$target" =~ ^[0-9]+$ ]]; then
+            env_manager_arr iib.volumes rm "$target"
+            return 0
+        fi
+        local match
+        match=$(env_manager get iib.volumes | tr ';' '\n' | grep ":/outputs/${target}:ro$")
+        if [ -z "$match" ]; then
+            log_error "No path with label '$target' found. See 'harbor iib paths ls'."
+            return 1
+        fi
+        env_manager_arr iib.volumes rm "$match"
+        log_info "Removed '$target'. Run 'harbor restart iib' to apply."
+        ;;
+    clear)
+        env_manager_arr iib.volumes clear
+        ;;
+    -h | --help | help | *)
+        echo "Manage extra browse/search roots for the iib service"
+        echo
+        echo "Usage:"
+        echo "  harbor iib paths ls                  - List configured paths"
+        echo "  harbor iib paths add <dir> [label]   - Mount a host directory read-only"
+        echo "  harbor iib paths rm <label|index>    - Remove a configured path"
+        echo "  harbor iib paths clear               - Remove all configured paths"
+        echo
+        echo "Each path is mounted read-only under /outputs/<label> - only that tree is"
+        echo "indexed and therefore searchable by iib (--extra_paths roots are not)."
+        echo "Changes take effect after 'harbor restart iib'."
+        ;;
+    esac
+}
+
+run_iib_command() {
+    case "$1" in
+    paths)
+        shift
+        run_iib_paths_command "$@"
+        ;;
+    version)
+        shift
+        env_manager_alias iib.version "$@"
+        ;;
+    image)
+        shift
+        env_manager_alias iib.image "$@"
+        ;;
+    args)
+        shift
+        env_manager_alias iib.args "$@"
+        ;;
+    secret)
+        shift
+        env_manager_alias iib.secret-key "$@"
+        ;;
+    cache)
+        shift
+        execute_and_process "env_manager get iib.cache" "sys_open {{output}}" "No iib.cache set"
+        ;;
+    -h | --help | help)
+        echo "Please note that this is not IIB's own CLI, but a Harbor CLI to manage the iib service."
+        echo
+        echo "Usage: harbor iib <command>"
+        echo
+        echo "Commands:"
+        echo "  harbor iib paths [ls|add|rm|clear]   - Manage extra browse/search roots (see 'harbor iib paths --help')"
+        echo "  harbor iib version [tag]             - Get or set the iib image docker tag"
+        echo "  harbor iib image [image]             - Get or set the iib image repository"
+        echo "  harbor iib args [args]               - Get or set extra CLI args passed to the entrypoint (EXTRA_OPTIONS)"
+        echo "  harbor iib secret [key]              - Get or set IIB_SECRET_KEY, required to access the UI once set"
+        echo "  harbor iib cache                     - Open the folder containing iib's index DB and thumbnail cache"
+        echo
+        echo "The SwarmUI output folder is always mounted at /outputs/swarmui; use"
+        echo "'harbor iib paths add' to add more directories to browse and search."
+        echo
+        echo "Note: custom paths are only injected when 'legacy.cli' is false (the default)."
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
 run_swarmui_command() {
     case "$1" in
     args)
@@ -12860,6 +13014,10 @@ main_entrypoint() {
     swarmui)
         shift
         run_swarmui_command "$@"
+        ;;
+    iib)
+        shift
+        run_iib_command "$@"
         ;;
     tabbyapi)
         shift
