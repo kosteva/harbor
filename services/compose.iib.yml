@@ -20,10 +20,12 @@ services:
     ports:
       - ${HARBOR_IIB_HOST_PORT}:8080
     volumes:
-      # Default browse root. `harbor iib paths add` mounts additional roots
-      # under /outputs/<label>; only paths under /outputs are indexed and
-      # therefore searchable (--extra_paths roots are browse-only).
-      - ${HARBOR_SWARMUI_OUTPUT}:/outputs/swarmui:ro
+      # Default browse root, mounted read-write so iib's delete/move/copy/
+      # organize actions work. `harbor iib paths add` mounts additional
+      # roots under /outputs/<label> the same way; only paths under
+      # /outputs are indexed and therefore searchable (--extra_paths
+      # roots are browse-only).
+      - ${HARBOR_SWARMUI_OUTPUT}:/outputs/swarmui
       - ${HARBOR_IIB_CACHE}:/cache
     networks:
       - harbor-network

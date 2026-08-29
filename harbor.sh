@@ -11185,11 +11185,11 @@ run_iib_paths_command() {
             log_error "Label '$reserved_label' is reserved for the built-in SwarmUI output mount"
             return 1
         fi
-        if env_manager get iib.volumes | tr ';' '\n' | grep -q ":/outputs/${label}:ro$"; then
+        if env_manager get iib.volumes | tr ';' '\n' | grep -q ":/outputs/${label}$"; then
             log_error "Label '$label' is already in use, run 'harbor iib paths rm $label' first or pick another label"
             return 1
         fi
-        env_manager_arr iib.volumes add "${abs_dir}:/outputs/${label}:ro"
+        env_manager_arr iib.volumes add "${abs_dir}:/outputs/${label}"
         log_info "Added '$label' -> $abs_dir. Run 'harbor restart iib' to pick it up."
         ;;
     rm | remove)
@@ -11204,7 +11204,7 @@ run_iib_paths_command() {
             return 0
         fi
         local match
-        match=$(env_manager get iib.volumes | tr ';' '\n' | grep ":/outputs/${target}:ro$")
+        match=$(env_manager get iib.volumes | tr ';' '\n' | grep ":/outputs/${target}$")
         if [ -z "$match" ]; then
             log_error "No path with label '$target' found. See 'harbor iib paths ls'."
             return 1
@@ -11220,12 +11220,14 @@ run_iib_paths_command() {
         echo
         echo "Usage:"
         echo "  harbor iib paths ls                  - List configured paths"
-        echo "  harbor iib paths add <dir> [label]   - Mount a host directory read-only"
+        echo "  harbor iib paths add <dir> [label]   - Mount a host directory read-write"
         echo "  harbor iib paths rm <label|index>    - Remove a configured path"
         echo "  harbor iib paths clear               - Remove all configured paths"
         echo
-        echo "Each path is mounted read-only under /outputs/<label> - only that tree is"
+        echo "Each path is mounted read-write under /outputs/<label> - only that tree is"
         echo "indexed and therefore searchable by iib (--extra_paths roots are not)."
+        echo "Read-write means iib's delete/move/copy/organize actions can modify or"
+        echo "remove files under these paths - use with directories you're OK editing."
         echo "Changes take effect after 'harbor restart iib'."
         ;;
     esac

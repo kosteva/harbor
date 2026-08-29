@@ -525,8 +525,8 @@
 - label: iib persists its index database and thumbnail cache at HARBOR_IIB_CACHE mounted to /cache; no ownership init sidecar is used since the upstream image runs as root and would overwrite any pre-chowned ownership on its own writes
   command: grep -q 'HARBOR_IIB_CACHE' profiles/default.env && grep -q '/cache' services/compose.iib.yml
   tags: [spec, implemented]
-- label: iib mounts every browse root read-only under /outputs/<label>, since the image's baked config.json points all indexed SD outdirs at /outputs and only that tree is searchable
-  command: grep -q '/outputs/swarmui:ro' services/compose.iib.yml
+- label: iib mounts every browse root read-write under /outputs/<label> so its delete/move/copy/organize actions can modify files, since the image's baked config.json points all indexed SD outdirs at /outputs and only that tree is searchable
+  command: grep -q '/outputs/swarmui' services/compose.iib.yml && ! grep -q '/outputs/swarmui:ro' services/compose.iib.yml
   tags: [spec, implemented]
 - label: iib pre-seeds HARBOR_SWARMUI_OUTPUT as the /outputs/swarmui browse root by default, with no other paths mounted until added
   command: grep -q 'HARBOR_SWARMUI_OUTPUT.*outputs/swarmui' services/compose.iib.yml
@@ -540,7 +540,7 @@
 - label: run_iib_command exists in harbor.sh and is reachable from the main dispatch case, exposing paths, version, image, args, secret and cache subcommands
   command: grep -q 'run_iib_command()' harbor.sh && grep -qF 'run_iib_command "$@"' harbor.sh
   tags: [spec, implemented]
-- label: harbor iib paths add canonicalizes the given directory to an absolute path, rejects paths that do not exist on disk, and rejects a duplicate or reserved (swarmui) label, before appending <path>:/outputs/<label>:ro to HARBOR_IIB_VOLUMES via env_manager_arr
+- label: harbor iib paths add canonicalizes the given directory to an absolute path, rejects paths that do not exist on disk, and rejects a duplicate or reserved (swarmui) label, before appending <path>:/outputs/<label> (read-write) to HARBOR_IIB_VOLUMES via env_manager_arr
   command: grep -q 'iib.volumes' harbor.sh && grep -q 'run_iib_paths_command' harbor.sh
   tags: [spec, implemented]
 - label: iib has metadata (name, tags, wikiUrl) registered in app/src/serviceMetadata.ts
