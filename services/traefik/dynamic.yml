@@ -1,0 +1,11 @@
+# Wildcard certificate for *.${traefik.domain}, served as the default for every
+# router with tls=true. Mounted from services/traefik/certs (see compose.traefik.yml).
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/wildcard.crt
+        keyFile: /certs/wildcard.key
+  certificates:
+    - certFile: /certs/wildcard.crt
+      keyFile: /certs/wildcard.key

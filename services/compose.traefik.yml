@@ -5,14 +5,6 @@ services:
     env_file:
       - ./.env
       - ./services/traefik/override.env
-    environment:
-      # DESEC_TOKEN/DESEC_PROPAGATION_TIMEOUT are lego-only — no Traefik
-      # config field for them at all, lego reads DNS-provider env vars
-      # directly. Everything else Traefik-related lives in traefik.yml
-      # (mounted below); it doesn't need per-user values now that certs are
-      # one-per-service rather than a wildcard, so it stays a plain file.
-      - DESEC_TOKEN=${HARBOR_TRAEFIK_DESEC_TOKEN}
-      - DESEC_PROPAGATION_TIMEOUT=${HARBOR_TRAEFIK_DESEC_PROPAGATION_TIMEOUT}
     ports:
       - ${HARBOR_TRAEFIK_HOST_PORT}:80
       - ${HARBOR_TRAEFIK_HTTPS_HOST_PORT}:443
@@ -21,38 +13,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${HARBOR_TRAEFIK_CONFIG}:/etc/traefik/traefik.yml:ro
-      - ./services/traefik/acme.json:/acme.json:rw # For Let's Encrypt certificates
-    # Wait for the init sidecar to fix up acme.json's permissions — Traefik
-    # refuses to use it for cert storage otherwise ("permissions ... are too
-    # open, please use 600").
-    depends_on:
-      traefik-init:
-        condition: service_completed_successfully
+      - ./services/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - ./services/traefik/certs:/certs:ro
     networks:
       - traefik-public
     # No traefik.enable label here on purpose: the dashboard is already
     # exposed directly via api.insecure on its own dedicated `traefik`
     # entrypoint (traefik.yml), independent of Docker-provider routing. An
-    # enable label with no entrypoints restriction previously made the
-    # docker provider auto-generate a phantom self-router on every
-    # entrypoint including websecure, using an auto-derived, dot-less
-    # hostname — harmless while no certResolver existed, but a hard ACME
-    # rejection ("Domain name needs at least one dot") once DNS-01 went live.
-
-  # Init sidecar: ensures acme.json exists as a real file at 0600 before
-  # traefik starts. Mirrors the pattern used for comfyui/swarmui.
-  traefik-init:
-    container_name: ${HARBOR_CONTAINER_PREFIX}.traefik-init
-    image: alpine:3.20
-    env_file:
-      - ./.env
-      - ./services/traefik/override.env
-    entrypoint: ["/bin/sh", "/init.sh"]
-    volumes:
-      - ./services/traefik/acme-init.sh:/init.sh:ro
-      - ./services/traefik/acme.json:/acme.json:rw
-    networks:
-      - traefik-public
+    # enable label with no entrypoints restriction makes the docker
+    # provider auto-generate a phantom self-router on every entrypoint
+    # including websecure, using an auto-derived, dot-less hostname — noise
+    # in the router list but otherwise harmless.
 
 networks:
   traefik-public:

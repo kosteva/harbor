@@ -8,13 +8,6 @@ services:
       - "traefik.http.services.tts.loadbalancer.server.port=8000"
       - "traefik.http.routers.tts.entrypoints=websecure"
       - "traefik.http.routers.tts.tls=true"
-      # A router's tls=true does NOT inherit the websecure entrypoint's
-      # default certResolver (verified empirically against a live Traefik
-      # v3 instance) — each router needs its own explicit certresolver
-      # label or ACME never activates for it. No tls.domains label: this
-      # gets each service its own individual certificate, auto-derived
-      # from its own Host() rule (Traefik's default behavior).
-      - "traefik.http.routers.tts.tls.certresolver=letsencrypt"
       - "traefik.http.routers.tts.service=tts"
 
     networks:

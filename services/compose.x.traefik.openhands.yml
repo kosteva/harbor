@@ -8,13 +8,6 @@ services:
       - "traefik.http.services.openhands.loadbalancer.server.port=3000"
       - "traefik.http.routers.openhands.entrypoints=websecure"
       - "traefik.http.routers.openhands.tls=true"
-      # A router's tls=true does NOT inherit the websecure entrypoint's
-      # default certResolver (verified empirically against a live Traefik
-      # v3 instance) — each router needs its own explicit certresolver
-      # label or ACME never activates for it. No tls.domains label: this
-      # gets each service its own individual certificate, auto-derived
-      # from its own Host() rule (Traefik's default behavior).
-      - "traefik.http.routers.openhands.tls.certresolver=letsencrypt"
       - "traefik.http.routers.openhands.service=openhands"
 
     networks:
