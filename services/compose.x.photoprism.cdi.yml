@@ -2,6 +2,9 @@
 # any updates will be overwritten.
 services:
   photoprism:
+    environment:
+      - PHOTOPRISM_INIT=https tensorflow-gpu gpu
+      - PHOTOPRISM_FFMPEG_ENCODER=nvidia
     deploy:
       resources:
         reservations:

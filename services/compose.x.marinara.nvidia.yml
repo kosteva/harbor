@@ -1,0 +1,16 @@
+services:
+  marinara:
+    # marinara-engine's own image isn't CUDA-based (unlike llamacpp/ollama/etc,
+    # whose images derive from nvidia/cuda and set this themselves), so nothing
+    # else declares these; without them the container runtime may only inject
+    # the "utility" capability, not the compute libs the system llama-server needs.
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

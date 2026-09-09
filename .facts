@@ -506,6 +506,9 @@
 - label: run_marinara_command exposes a 'llama' subcommand getting/setting HARBOR_MARINARA_SYSTEM_LLAMA_IMAGE
   command: grep -q 'marinara.system.llama.image' harbor.sh
   tags: [spec, implemented]
+- label: marinara's system llama-server gets GPU device access via services/compose.x.marinara.nvidia.yml (and its generated .cdi.yml counterpart), following the same per-service cross-file convention as llamacpp/ollama/kobold, with NVIDIA_DRIVER_CAPABILITIES set explicitly since marinara-engine's own image isn't CUDA-based and won't set it itself
+  command: grep -q 'driver: nvidia' services/compose.x.marinara.nvidia.yml && grep -q 'NVIDIA_DRIVER_CAPABILITIES' services/compose.x.marinara.nvidia.yml && grep -q 'driver: cdi' services/compose.x.marinara.cdi.yml
+  tags: [spec, implemented]
 
 ## marinara x backends
 - label: every marinara backend cross-file (dmr, llamacpp, mlx, ollama, omlx) opens the PROVIDER_LOCAL_URLS_ENABLED gate and depends_on the backend with condition service_healthy, since Marinara connections are created in its UI and there is no env var to auto-configure one
