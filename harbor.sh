@@ -10395,6 +10395,10 @@ run_marinara_command() {
         shift
         env_manager_alias marinara.log.level "$@"
         ;;
+    llama)
+        shift
+        env_manager_alias marinara.system.llama.image "$@"
+        ;;
     local)
         shift
         case "$1" in
@@ -10423,6 +10427,7 @@ run_marinara_command() {
         echo "  harbor marinara csrf-origins [origins] - Get/set CSRF_TRUSTED_ORIGINS (comma-separated)"
         echo "  harbor marinara ip-allowlist [ips]     - Get/set IP_ALLOWLIST (comma-separated IPs/CIDRs)"
         echo "  harbor marinara log [level]            - Get/set Marinara LOG_LEVEL"
+        echo "  harbor marinara llama [image]          - Get/set the llama.cpp image providing the System llama-server runtime"
         echo "  harbor marinara local [on|off]         - Get/set *_LOCAL_URLS_ENABLED (allow LAN/Docker backends)"
         echo "  harbor marinara workspace              - Open the Marinara workspace directory"
         return 1

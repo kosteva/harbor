@@ -10,6 +10,10 @@ services:
       - ${HARBOR_MARINARA_HOST_PORT}:7860
     volumes:
       - ${HARBOR_MARINARA_WORKSPACE}/data:/app/data
+      - marinara_system_llama:/opt/marinara-llama:ro
+    depends_on:
+      marinara-llama-init:
+        condition: service_completed_successfully
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
@@ -32,5 +36,31 @@ services:
       - PROVIDER_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
       - IMAGE_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
       - TTS_LOCAL_URLS_ENABLED=${HARBOR_MARINARA_LOCAL_URLS}
+      # Puts a wrapper for the llama-server extracted by marinara-llama-init
+      # on PATH, so Marinara's "System llama-server" runtime resolves to it.
+      - PATH=/opt/marinara-llama/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - MARINARA_SIDECAR_USE_SYSTEM_LLAMA=true
     networks:
       - harbor-network
+
+  # Extracts llama-server + its libraries from HARBOR_MARINARA_SYSTEM_LLAMA_IMAGE
+  # into a shared volume before marinara starts, so the "System llama-server"
+  # runtime option in Marinara's Local AI Model panel has a real binary to find.
+  marinara-llama-init:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.marinara-llama-init
+    image: ${HARBOR_MARINARA_SYSTEM_LLAMA_IMAGE}
+    env_file:
+      - ./.env
+      - ./services/marinara/override.env
+    entrypoint: ["/bin/sh", "/init.sh"]
+    environment:
+      TARGET_UID: ${HARBOR_USER_ID:-1000}
+      TARGET_GID: ${HARBOR_GROUP_ID:-1000}
+    volumes:
+      - ./services/marinara/system-llama-init.sh:/init.sh:ro
+      - marinara_system_llama:/out
+    networks:
+      - harbor-network
+
+volumes:
+  marinara_system_llama:

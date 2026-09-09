@@ -494,6 +494,18 @@
 - label: marinara has a documentation page at docs/2.1.17-Frontend-Marinara.md covering env vars, the harbor marinara CLI, and connecting to a Harbor backend
   command: test -f docs/2.1.17-Frontend-Marinara.md
   tags: [spec, implemented]
+- label: marinara's container carries a llama.cpp build on PATH at /opt/marinara-llama/bin, populated by a marinara-llama-init sidecar from HARBOR_MARINARA_SYSTEM_LLAMA_IMAGE, so the engine's 'which llama-server' detection succeeds
+  command: grep -q 'marinara-llama-init' services/compose.marinara.yml && grep -q '/opt/marinara-llama/bin' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: the PATH entry for marinara's system llama-server is a wrapper script that sets LD_LIBRARY_PATH, because Marinara does not patch the library path for runtimes whose source is 'system'
+  command: grep -q 'LD_LIBRARY_PATH' services/marinara/system-llama-init.sh
+  tags: [spec, implemented]
+- label: marinara sets MARINARA_SIDECAR_USE_SYSTEM_LLAMA=true so the default 'auto' runtime preference resolves to the shipped build rather than downloading a llama.cpp release at runtime
+  command: grep -q 'MARINARA_SIDECAR_USE_SYSTEM_LLAMA=true' services/compose.marinara.yml
+  tags: [spec, implemented]
+- label: run_marinara_command exposes a 'llama' subcommand getting/setting HARBOR_MARINARA_SYSTEM_LLAMA_IMAGE
+  command: grep -q 'marinara.system.llama.image' harbor.sh
+  tags: [spec, implemented]
 
 ## marinara x backends
 - label: every marinara backend cross-file (dmr, llamacpp, mlx, ollama, omlx) opens the PROVIDER_LOCAL_URLS_ENABLED gate and depends_on the backend with condition service_healthy, since Marinara connections are created in its UI and there is no env var to auto-configure one
