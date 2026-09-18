@@ -68,13 +68,16 @@ textgrad/workspace/*
 !textgrad/workspace/000-sample.ipynb
 
 # ChatUI
-chatui/data/
+services/chatui/data/
 
 # ComfyUI
 comfyui/workspace/
 
+# Hermes (default workspace lives at repo root)
+/hermes/
+
 # Perplexica
-perplexica/data/
+services/perplexica/data/
 perplexica/config.toml
 
 # AutoGPT
@@ -86,14 +89,16 @@ autogpt/logs/
 bionicgpt/db
 
 # Omnichain
-omnichain/data/
+/services/omnichain/data/*
+!/services/omnichain/data/.gitkeep
 
 # Bench
-bench/results/
+services/bench/results/
 
 # lm_eval
-lmeval/cache/
-lmeval/results/
+services/lmeval/cache/
+services/lmeval/results/
+services/lmeval/.hf-cache/
 
 # profiles
 profiles/*
@@ -110,7 +115,7 @@ jupyter/workspace/*
 **/__pycache__/
 
 # AnythingLLM
-anythingllm/storage/
+services/anythingllm/storage/
 
 # Build
 dist/
@@ -123,7 +128,10 @@ pipelines/*
 !pipelines/override.env
 
 # Qdrant
-qdrant/storage
+services/qdrant/storage
+
+# PhotoPrism
+services/photoprism/storage/
 
 # Merged compose
 __harbor*.yml
@@ -143,8 +151,7 @@ skills-lock.json
 .claude/scheduled_tasks.lock
 
 # Lemonade
-lemonade/cache/
-lemonade/llama/
+services/lemonade/data/
 
 # Parcel
 .parcel-cache
@@ -156,3 +163,5 @@ integration/
 
 # Skill-creator runtime scripts
 .agents/skills/skill-creator/scripts/
+services/deerflow/data
+services/deerflow/redis

@@ -824,17 +824,24 @@ run_harbor_doctor() {
             log_warn "  Found $env_issues .env issue(s). Run 'harbor config update' to regenerate from defaults."
         fi
 
-        # Warn about stale keys: present in .env but absent from profiles/default.env
+        # Warn about stale keys: present in .env but absent from every
+        # default source (profiles/default.env + services/*/default.env)
         if [ -f "$default_profile" ] && [ -r "$default_profile" ]; then
             local stale_count=0
             local stale_keys=""
             local env_key
+            # Bash 3 compatible array fill (no bash-4 array builtins)
+            local doctor_defaults=()
+            local doctor_default_file
+            while IFS= read -r doctor_default_file; do
+                doctor_defaults+=("$doctor_default_file")
+            done < <(collect_default_env_files)
             while IFS= read -r line || [ -n "$line" ]; do
                 [[ -z "$line" || "$line" =~ ^[[:space:]]*# || "$line" != *=* ]] && continue
                 env_key="${line%%=*}"
                 # Skip non-HARBOR_ keys (user-added, system, etc.)
                 [[ "$env_key" != HARBOR_* ]] && continue
-                if ! grep -q "^${env_key}=" "$default_profile" 2>/dev/null; then
+                if ! grep -qh "^${env_key}=" "${doctor_defaults[@]}" 2>/dev/null; then
                     stale_count=$((stale_count + 1))
                     if [ "$stale_count" -le 5 ]; then
                         stale_keys="${stale_keys:+$stale_keys, }$env_key"
@@ -1462,6 +1469,7 @@ run_up() {
     local should_attach=false
     local no_defaults=false
     local skip_port_check=false
+    local only_named=false
     local filtered_args=()
     local up_args=()
 
@@ -1482,6 +1490,12 @@ run_up() {
             ;;
         --skip-port-check)
             skip_port_check=true
+            ;;
+        --only-named)
+            # Internal (used by 'harbor restart <service...>'): hand the named
+            # services to compose instead of bringing up everything in the
+            # resolved file set. Not part of the public 'harbor up' contract.
+            only_named=true
             ;;
         *)
             filtered_args+=("$arg")
@@ -1601,8 +1615,21 @@ run_up() {
         fi
     done
 
-    $(compose_with_options "${up_args[@]}" "${filtered_args[@]}") up -d --wait
-    local up_exit=$?
+    local up_exit=0
+    if $only_named; then
+        local up_services=()
+        for service in "${filtered_args[@]}"; do
+            if is_capability "$service"; then
+                continue
+            fi
+            up_services+=("$service")
+        done
+        if [ ${#up_services[@]} -gt 0 ]; then
+            $(compose_with_options "${up_args[@]}" "${filtered_args[@]}") up -d --wait "${up_services[@]}" || up_exit=$?
+        fi
+    else
+        $(compose_with_options "${up_args[@]}" "${filtered_args[@]}") up -d --wait || up_exit=$?
+    fi
 
     if [ $up_exit -ne 0 ]; then
         log_error "Failed to start services."
@@ -1650,15 +1677,21 @@ run_down() {
         echo
         echo "Usage: harbor down [service...] [options]"
         echo
+        echo "With no arguments, stops and removes every running service."
+        echo "With service names, stops and removes only those services and"
+        echo "their '<service>-*' companions - other running services are left"
+        echo "untouched."
+        echo
         echo "Options:"
-        echo "  --volumes, -v       Remove named volumes declared in compose files"
-        echo "  --rmi <type>        Remove images (\"local\" or \"all\")"
+        echo "  --volumes, -v       Remove volumes: named volumes for a bare 'down';"
+        echo "                      anonymous volumes only when services are named"
+        echo "  --rmi <type>        Remove images (\"local\" or \"all\"), bare 'down' only"
         echo "  --timeout, -t <s>   Shutdown timeout in seconds (default: 10)"
         echo
         echo "Examples:"
         echo "  harbor down                 Stop all running services"
-        echo "  harbor down ollama webui    Stop specific services"
-        echo "  harbor down --volumes       Stop all and remove volumes"
+        echo "  harbor down ollama webui    Stop only ollama and webui"
+        echo "  harbor down --volumes       Stop all and remove named volumes"
         echo "  harbor down --rmi local     Stop all and remove locally-built images"
         echo
         echo "See also: harbor restart, harbor ps"
@@ -1784,11 +1817,6 @@ run_down() {
         run_dmr_command stop || true
     fi
 
-    local matched_services_str=""
-    if [ ${#matched_services[@]} -gt 0 ]; then
-        matched_services_str=$(printf " %s" "${matched_services[@]}")
-    fi
-
     # Add default timeout unless user specified one
     local has_timeout=false
     local flag
@@ -1800,8 +1828,54 @@ run_down() {
         timeout_args=(--timeout 10)
     fi
 
-    $(compose_with_options "${compose_targets[@]}") down --remove-orphans "${timeout_args[@]}" "${down_flags[@]}" "${requested_services[@]}" $matched_services_str
-    local down_exit=$?
+    local down_exit=0
+
+    if [ ${#requested_services[@]} -eq 0 ]; then
+        $(compose_with_options "${compose_targets[@]}") down --remove-orphans "${timeout_args[@]}" "${down_flags[@]}" || down_exit=$?
+    else
+        # Scoped teardown. 'compose down' always tears down the whole project
+        # and --remove-orphans additionally kills any running service outside
+        # the resolved file set, so naming services here would sweep unrelated
+        # containers. 'stop' + 'rm -f' over the wildcard file set touches only
+        # the named services and their companions.
+        local stop_args=("${timeout_args[@]}")
+        local rm_flags=()
+        local i=0
+        while [ $i -lt ${#down_flags[@]} ]; do
+            flag="${down_flags[$i]}"
+            case "$flag" in
+            -v|--volumes)
+                rm_flags+=("-v")
+                ;;
+            --timeout|-t)
+                stop_args+=("--timeout" "${down_flags[$((i + 1))]:-10}")
+                i=$((i + 1))
+                ;;
+            --timeout=*|-t=*)
+                stop_args+=("--timeout" "${flag#*=}")
+                ;;
+            --rmi)
+                log_warn "'--rmi' only applies to a bare 'harbor down' - ignoring it for ${requested_services[*]}."
+                i=$((i + 1))
+                ;;
+            --rmi=*)
+                log_warn "'--rmi' only applies to a bare 'harbor down' - ignoring it for ${requested_services[*]}."
+                ;;
+            *)
+                log_warn "Ignoring '$flag' - not supported when stopping specific services."
+                ;;
+            esac
+            i=$((i + 1))
+        done
+
+        local down_target_services=("${requested_services[@]}" "${matched_services[@]}")
+        local compose_cmd
+        compose_cmd=$(compose_with_options "*") || return 1
+        $compose_cmd stop "${stop_args[@]}" "${down_target_services[@]}" || down_exit=$?
+        if [ $down_exit -eq 0 ]; then
+            $compose_cmd rm -f "${rm_flags[@]}" "${down_target_services[@]}" || down_exit=$?
+        fi
+    fi
 
     if [ $down_exit -eq 0 ]; then
         log_info "Services stopped."
@@ -1820,8 +1894,9 @@ run_restart() {
         echo "Usage: harbor restart [service...] [options]"
         echo
         echo "With no arguments, restarts all currently running services."
-        echo "With service names, stops those services and starts them along"
-        echo "with any other currently running services."
+        echo "With service names, recreates only those services (and their"
+        echo "'<service>-*' companions) - other running services keep running"
+        echo "and are not recreated."
         echo
         echo "Options:"
         echo "  --open, -o          Open in browser after restart"
@@ -1831,7 +1906,7 @@ run_restart() {
         echo
         echo "Examples:"
         echo "  harbor restart              Restart all running services"
-        echo "  harbor restart ollama       Restart ollama (keeps other services running)"
+        echo "  harbor restart ollama       Restart only ollama, leaving the rest running"
         echo "  harbor restart webui --tail Restart webui and tail logs"
         echo
         echo "See also: harbor down, harbor up"
@@ -1903,12 +1978,33 @@ run_restart() {
         fi
     done
 
+    # Named services restart in place: tear down exactly what was asked for
+    # (plus its companions, which run_down also removes) and bring back only
+    # that set, leaving every other running service alone.
+    local restart_services=()
+    if [ ${#services[@]} -gt 0 ]; then
+        local raw_services companion
+        raw_services=$(docker compose ps -a --format "{{.Service}}")
+        restart_services=("${services[@]}")
+        for svc in "${services[@]}"; do
+            while IFS= read -r companion; do
+                [ -n "$companion" ] || continue
+                restart_services+=("$companion")
+            done <<< "$(echo "$raw_services" | grep "^${svc}-" || true)"
+        done
+    fi
+
     if ! run_down "${services[@]}"; then
         log_error "Failed to stop services. Aborting restart."
         log_error "Check 'docker ps' for stuck containers, then retry."
         return 1
     fi
-    run_up "${unique_services[@]}" "${flags[@]}"
+
+    if [ ${#services[@]} -gt 0 ]; then
+        run_up --only-named "${restart_services[@]}" "${flags[@]}"
+    else
+        run_up "${unique_services[@]}" "${flags[@]}"
+    fi
 }
 
 run_ps() {
@@ -2907,7 +3003,7 @@ launch_workflow_services() {
     fi
 
     case "$1" in
-    quickhop | deephop)
+    quickhop | deephop | codemode)
         echo "searxng"
         ;;
     esac
@@ -3506,6 +3602,7 @@ launch_host_tool_command() {
     local models=""
     local config_only=false
     local launch_workflow=""
+    local launch_codemode=false
     local boost_tool_groups=()
     local boost_tools=()
     local boost_services=()
@@ -3556,6 +3653,10 @@ launch_host_tool_command() {
             launch_append_unique boost_tool_groups "web"
             shift
             ;;
+        --codemode)
+            launch_codemode=true
+            shift
+            ;;
         --workflow)
             if launch_option_value_missing "${2-}"; then
                 log_error "Usage: harbor launch $tool --workflow <preset>"
@@ -3583,6 +3684,14 @@ launch_host_tool_command() {
             ;;
         esac
     done
+
+    if $launch_codemode; then
+        if [ -n "$launch_workflow" ] && [ "$launch_workflow" != "codemode" ]; then
+            log_error "harbor launch does not support --codemode and --workflow together."
+            return 1
+        fi
+        launch_workflow="codemode"
+    fi
 
     if [ ${#boost_tool_groups[@]} -gt 0 ] && [ -n "$launch_workflow" ]; then
         log_error "harbor launch does not support --web and --workflow together."
@@ -3829,7 +3938,7 @@ run_launch_command() {
         echo "When an inference backend is already running, backend-specific compose"
         echo "overlays are included the same way they are for direct service CLI commands."
         echo "Host tool adapters accept launch options before the tool name: --backend,"
-        echo "--model, --config, --web, and --workflow."
+        echo "--model, --config, --web, --codemode, and --workflow."
         echo "Every argument after the tool name is passed to the launched tool unchanged."
         echo "--web starts Boost with web_search and read_url tools, starts SearXNG,"
         echo "and routes the tool to a generated boost-web-... workflow model."
@@ -3837,6 +3946,8 @@ run_launch_command() {
         echo "starts SearXNG when web research is required, and routes the tool to"
         echo "a prefixed model such as quickhop-qwen3.5:4b or autocheck-qwen3.5:4b."
         echo "No built-in workflow presets ship by default."
+        echo "--codemode is sugar for --workflow codemode: the model gets a single"
+        echo "execute_code tool and calls every other Boost tool from Python."
         echo "If no backend is running, host tool adapters start llamacpp by default."
         echo "Use --service before the handle to bypass host tool adapters for name-colliding services."
         echo
@@ -3848,6 +3959,7 @@ run_launch_command() {
         echo
         echo "Examples:"
         echo "  harbor launch --web --backend ollama --model qwen3.5:4b codex"
+        echo "  harbor launch --codemode --backend ollama --model qwen3.5:4b codex"
         echo "  harbor launch --workflow quickhop --backend ollama --model qwen3.5:4b codex"
         echo "  harbor launch --workflow autocheck --backend ollama --model qwen3.5:4b codex"
         echo "  harbor launch --backend ollama --model qwen3.5:4b codex"
@@ -3885,7 +3997,7 @@ run_launch_command() {
             launch_options+=("$1")
             shift
             ;;
-        --config | --web)
+        --config | --web | --codemode)
             launch_options+=("$1")
             shift
             ;;
@@ -5547,13 +5659,35 @@ get_service_port() {
         return 1
     fi
 
-    # Get the port mapping for the service
-    if port=$(docker port "$target_name" | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p' | head -n 1) && [ -n "$port" ]; then
-        echo "$port"
-    else
-        log_error "No port mapping found for service '$1'. The service may not expose a port, or it may still be starting up."
-        return 1
+    # Get the port mappings for the service
+    local mapped_ports
+    mapped_ports=$(docker port "$target_name" | sed -n 's/.*:\([0-9][0-9]*\)$/\1/p')
+
+    if [ -n "$mapped_ports" ]; then
+        # With multiple mappings (e.g. UI + VNC + debug ports), docker port
+        # order is arbitrary — prefer the configured main host port when it
+        # is among the published ones
+        if port=$(env_manager --silent get "${service_name}.host_port" 2>/dev/null) \
+            && [ -n "$port" ] && echo "$mapped_ports" | grep -qx "$port"; then
+            echo "$port"
+            return 0
+        fi
+
+        echo "$mapped_ports" | head -n 1
+        return 0
     fi
+
+    # Host-networked containers have no docker port mappings; the service
+    # listens directly on the host, so fall back to the configured host port.
+    if [ "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$target_name" 2>/dev/null)" = "host" ]; then
+        if port=$(env_manager --silent get "${service_name}.host_port" 2>/dev/null) && [ -n "$port" ]; then
+            echo "$port"
+            return 0
+        fi
+    fi
+
+    log_error "No port mapping found for service '$1'. The service may not expose a port, or it may still be starting up."
+    return 1
 }
 
 get_service_url() {
@@ -6020,6 +6154,81 @@ set_colors() {
     nok="${c_r}✘${c_nc}"
 }
 
+# Default configuration is assembled from profiles/default.env plus a
+# per-service services/<name>/default.env holding that service's
+# HARBOR_<NAME>_* keys. Prints one path per line, profile first, services
+# sorted (glob order).
+collect_default_env_files() {
+    printf '%s\n' "$default_profile"
+    local svc_default
+    for svc_default in "$harbor_home"/services/*/default.env; do
+        [ -f "$svc_default" ] && printf '%s\n' "$svc_default"
+    done
+    return 0
+}
+
+# Concatenate every default env source into $1, guaranteeing a newline
+# between files so a source without a trailing newline cannot glue its last
+# key onto the next file's first line.
+# Assembly is done in a private temp file next to the target and renamed into
+# place, so several harbor processes repairing the same .env at once cannot
+# append into each other's partial output (which left .env with every key
+# duplicated once per racing process).
+build_default_env_file() {
+    local out_file=$1
+    local src
+    local out_dir
+    local tmp_out
+
+    out_dir=$(dirname "$out_file")
+    tmp_out=$(mktemp "$out_dir/.harbor-defaults.XXXXXX") || return 1
+
+    while IFS= read -r src; do
+        cat "$src" >>"$tmp_out" || {
+            rm -f "$tmp_out" 2>/dev/null
+            return 1
+        }
+        if [ -s "$tmp_out" ] && [ -n "$(tail -c1 "$tmp_out")" ]; then
+            printf '\n' >>"$tmp_out"
+        fi
+    done < <(collect_default_env_files)
+
+    chmod 600 "$tmp_out" 2>/dev/null || true
+
+    mv -f "$tmp_out" "$out_file" || {
+        rm -f "$tmp_out" 2>/dev/null
+        return 1
+    }
+}
+
+# merge_env_files against the combined defaults (profile + per-service files).
+merge_default_env_files() {
+    local target_file=${1:-.env}
+    local combined
+
+    if [ ! -f "$default_profile" ]; then
+        log_error "Default profile not found: $default_profile"
+        log_error "Your Harbor installation may be corrupted. Try reinstalling with: curl -sS https://get.harbor.sh | bash"
+        return 1
+    fi
+
+    combined=$(mktemp -t harbor.XXXXXX) || {
+        log_error "Failed to create temporary file for config merge."
+        return 1
+    }
+
+    if ! build_default_env_file "$combined"; then
+        rm -f "$combined" 2>/dev/null
+        log_error "Failed to assemble default configuration."
+        return 1
+    fi
+
+    local merge_rc=0
+    merge_env_files "$combined" "$target_file" "default configuration" || merge_rc=$?
+    rm -f "$combined" 2>/dev/null
+    return $merge_rc
+}
+
 ensure_env_file() {
     local src_file=$default_profile
     local tgt_file=".env"
@@ -6037,7 +6246,7 @@ ensure_env_file() {
             return 1
         fi
         echo "Creating .env file..."
-        if ! cp "$src_file" "$tgt_file"; then
+        if ! build_default_env_file "$tgt_file"; then
             log_error "Failed to create .env file from $src_file"
             return 1
         fi
@@ -6058,6 +6267,9 @@ reset_env_file() {
 merge_env_files() {
     local default_file=$1
     local target_file=$2
+    # Optional display name for logs — callers merging a temporary combined
+    # defaults file pass a human-readable label instead of the temp path.
+    local source_label=${3:-}
 
     if [ -z "$default_file" ]; then
         default_file=$default_profile
@@ -6065,6 +6277,10 @@ merge_env_files() {
 
     if [ -z "$target_file" ]; then
         target_file=".env"
+    fi
+
+    if [ -z "$source_label" ]; then
+        source_label=$default_file
     fi
 
     if [[ ! -f "$default_file" ]]; then
@@ -6076,17 +6292,23 @@ merge_env_files() {
     # Check if both files exist
     if [[ ! -f "$target_file" ]]; then
         cp "$default_file" "$target_file"
-        echo "Copied $default_file to $target_file"
+        echo "Copied $source_label to $target_file"
         return
     fi
 
-    # Create a temporary file; clean up on error or interrupt
+    # Create a temporary file next to the target so the final mv is an atomic
+    # same-filesystem rename; clean up on error or interrupt
     local temp_file
-    temp_file=$(mktemp -t harbor.XXXXXX) || {
+    temp_file=$(mktemp "$(dirname "$target_file")/.harbor-merge.XXXXXX") || {
         log_error "Failed to create temporary file for config merge."
         return 1
     }
     trap 'rm -f "$temp_file" 2>/dev/null' RETURN
+
+    # Keys already written to the merged output — a key may appear more than
+    # once across the combined default sources (profile + per-service files)
+    # or in a target left duplicated by an older Harbor; first occurrence wins.
+    local seen_keys=$'\n'
 
     # Variable to track empty lines
     local empty_lines=0
@@ -6119,6 +6341,11 @@ merge_env_files() {
             repeat_count=0
             if [[ "$line" =~ ^[[:alnum:]_]+=.* ]]; then
                 var_name="${line%%=*}"
+                if [[ "$seen_keys" == *$'\n'"$var_name"$'\n'* ]]; then
+                    prev_line="$line"
+                    continue
+                fi
+                seen_keys="${seen_keys}${var_name}"$'\n'
                 if grep -q "^${var_name}=" "$target_file"; then
                     # If the variable exists in target, use that value
                     # Use head -1 to avoid duplicating keys if target has multiple entries
@@ -6139,7 +6366,11 @@ merge_env_files() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" =~ ^[[:alnum:]_]+=.* ]]; then
             var_name="${line%%=*}"
+            if [[ "$seen_keys" == *$'\n'"$var_name"$'\n'* ]]; then
+                continue
+            fi
             if ! grep -q "^${var_name}=" "$default_file"; then
+                seen_keys="${seen_keys}${var_name}"$'\n'
                 if ! $added_custom; then
                     echo "" >> "$temp_file"
                     echo "# Custom Variables" >> "$temp_file"
@@ -6170,7 +6401,7 @@ merge_env_files() {
     # Clear the RETURN trap since temp_file has been moved (no longer exists)
     trap - RETURN
 
-    log_info "Merged content from $default_file into $target_file, preserving order and structure"
+    log_info "Merged content from $source_label into $target_file, preserving order and structure"
 }
 
 execute_and_process() {
@@ -6655,7 +6886,7 @@ env_manager() {
         ;;
     update)
         shift
-        merge_env_files
+        merge_default_env_files
         ;;
     search | find)
         if command -v deno &>/dev/null || _check_docker 2>/dev/null; then
@@ -7700,7 +7931,7 @@ harbor_profile_merge() {
         log_error "Failed to merge current config into profile."
         return 1
     fi
-    if ! merge_env_files "$default_profile" "$tmp_env_merge"; then
+    if ! merge_default_env_files "$tmp_env_merge"; then
         rm -f "$tmp_env_merge" 2>/dev/null
         log_error "Failed to merge default profile."
         return 1
@@ -7801,7 +8032,8 @@ run_tokscale_cli() {
 check_hf_cache() {
     local maybe_cache_entry
 
-    maybe_cache_entry=$(run_hf_docker_cli scan-cache | grep -F "$1")
+    # "scan-cache" was removed in hf CLI 1.x in favor of "cache ls"
+    maybe_cache_entry=$(run_hf_docker_cli cache ls --no-truncate 2>/dev/null | grep -F "$1")
 
     if [ -z "$maybe_cache_entry" ]; then
         log_warn "$1 is missing in Hugging Face cache."
@@ -8374,7 +8606,7 @@ update_harbor() {
     fi
 
     log_info "Merging .env files..."
-    if ! merge_env_files; then
+    if ! merge_default_env_files; then
         log_warn "Config merge encountered issues. Your .env may need manual review."
         log_warn "Run 'harbor config update' to retry, or compare with profiles/default.env"
         if [ -n "$old_version" ]; then
@@ -11062,19 +11294,16 @@ run_comfyui_workspace_command() {
     case "$1" in
     open)
         shift
-        sys_open "$harbor_home/services/comfyui/workspace"
+        sys_open "$harbor_home/$(env_manager get comfyui.workspace)"
         ;;
     sync)
         shift
-        log_info "Cleaning up ComfyUI environment..."
-        run_exec comfyui rm -rf /workspace/environments/python/comfyui
-        log_info "Syncing installed custom nodes to persistent storage..."
-        run_exec comfyui venv-sync comfyui
+        log_warn "'harbor comfyui workspace sync' is deprecated: the comfyui-boot image persists everything (ComfyUI, custom nodes, models) directly in the workspace — no sync needed."
         ;;
     clear)
         shift
         log_info "Cleaning up ComfyUI workspace..."
-        run_gum confirm "This operation will delete all stored ComfyUI configuration. Continue?" && run_exec comfyui rm -rf /workspace/* || echo "Cleanup aborted."
+        run_gum confirm "This operation will delete all stored ComfyUI configuration and models. Continue?" && run_exec comfyui sh -c 'rm -rf /root/* /root/.cache' || echo "Cleanup aborted."
         log_info "Restart Harbor to re-init Comfy UI"
         ;;
     *)
@@ -11093,17 +11322,10 @@ run_comfyui_command() {
         shift
         env_manager_alias comfyui.image "$@"
         ;;
-    user)
+    user | password | auth)
         shift
-        env_manager_alias comfyui.user "$@"
-        ;;
-    password)
-        shift
-        env_manager_alias comfyui.password "$@"
-        ;;
-    auth)
-        shift
-        env_manager_alias comfyui.auth "$@"
+        log_warn "'harbor comfyui user/password/auth' is deprecated: upstream ComfyUI has no built-in authentication (the old ai-dock image provided it)."
+        log_warn "To expose ComfyUI over the network, use 'harbor tunnel comfyui' or put it behind traefik with auth middleware."
         ;;
     workspace)
         shift
@@ -11111,7 +11333,7 @@ run_comfyui_command() {
         ;;
     output)
         shift
-        sys_open "$harbor_home/services/comfyui/workspace/ComfyUI/output"
+        sys_open "$harbor_home/$(env_manager get comfyui.workspace)/ComfyUI/output"
         ;;
     -h | --help | help)
         echo "Please note that this is not ComfyUI CLI, but a Harbor CLI to manage ComfyUI service."
@@ -11121,13 +11343,13 @@ run_comfyui_command() {
         echo "Commands:"
         echo "  harbor comfyui version [version]   - Get or set the ComfyUI version docker tag"
         echo "  harbor comfyui image [image]       - Get or set the ComfyUI image repository"
-        echo "  harbor comfyui user [username]     - Get or set the ComfyUI username"
-        echo "  harbor comfyui password [password] - Get or set the ComfyUI password"
-        echo "  harbor comfyui auth [true|false]   - Enable/disable ComfyUI authentication"
-        echo "  harbor comfyui workspace sync    - Sync installed custom nodes to persistent storage"
         echo "  harbor comfyui workspace open    - Open folder containing ComfyUI workspace in the File Manager"
         echo "  harbor comfyui workspace clear   - Clear ComfyUI workspace, including all configurations and models"
         echo "  harbor comfyui output             - Open folder containing ComfyUI output in the File Manager"
+        echo
+        echo "Deprecated (were features of the old ai-dock image):"
+        echo "  harbor comfyui user/password/auth  - upstream ComfyUI has no built-in authentication"
+        echo "  harbor comfyui workspace sync      - comfyui-boot persists everything in the workspace"
         ;;
     *)
         return 1
@@ -12423,7 +12645,7 @@ run_modularmax_command() {
 # ========================================================================
 
 # Globals
-version="0.5.5"
+version="0.5.11"
 harbor_release_url="https://api.github.com/repos/av/harbor/releases/latest"
 delimiter="|"
 scramble_exit_code=42
