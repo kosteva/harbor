@@ -1232,4 +1232,12 @@ export const serviceMetadata: Record<string, Partial<HarborService>> = {
         wikiUrl: `${wikiUrl}/2.1.19-Frontend-IIB`,
         tooltip: 'Fast browser and search UI for generated images and videos.',
     },
+    forge: {
+        name: 'Forge Neo',
+        tags: [HST.frontend, HST.image],
+        projectUrl: 'https://github.com/Haoming02/sd-webui-forge-classic/tree/neo',
+        logo: 'https://github.com/Haoming02.png?size=200',
+        wikiUrl: `${wikiUrl}/2.1.20-Frontend-Forge`,
+        tooltip: 'Stable Diffusion WebUI Forge Neo: A1111-style image generation UI for SD, Flux, Qwen-Image and Wan models.',
+    },
 };

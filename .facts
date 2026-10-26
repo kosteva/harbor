@@ -1393,6 +1393,45 @@
   command: test -f docs/2.1.19-Frontend-IIB.md
   tags: [spec, implemented]
 
+## forge
+- forge wraps Haoming02/sd-webui-forge-classic (Forge Neo branch), an A1111-style Stable Diffusion/Flux/Qwen/Wan image generation web UI, as a Harbor frontend service using the unofficial prebuilt oromis995/sd-forge-neo image built from upstream's neo/docker Dockerfile @spec @forge @implemented
+- label: forge has a compose file at services/compose.forge.yml defining a forge service on the harbor network
+  command: test -f services/compose.forge.yml && grep -q 'harbor-network' services/compose.forge.yml
+  tags: [spec, forge, implemented]
+- label: forge runs HARBOR_FORGE_IMAGE:HARBOR_FORGE_VERSION (default oromis995/sd-forge-neo pinned to a dated snapshot tag, since upstream's latest tag lags the commit tags) pinned to linux/amd64, since no arm64 manifest is published
+  command: grep -q 'HARBOR_FORGE_IMAGE="oromis995/sd-forge-neo"' services/forge/default.env && grep -q 'HARBOR_FORGE_VERSION=' services/forge/default.env && grep -q 'platform: linux/amd64' services/compose.forge.yml
+  tags: [spec, forge, implemented]
+- label: forge defaults live in services/forge/default.env, not profiles/default.env
+  command: test -f services/forge/default.env && ! grep -q HARBOR_FORGE_ profiles/default.env
+  tags: [spec, forge, implemented]
+- label: forge publishes its web UI on container port 7860 via HARBOR_FORGE_HOST_PORT
+  command: grep -q 'HARBOR_FORGE_HOST_PORT=' services/forge/default.env && grep -q 'HARBOR_FORGE_HOST_PORT}:7860' services/compose.forge.yml
+  tags: [spec, forge, implemented]
+- label: forge passes HARBOR_FORGE_ARGS to upstream's entrypoint as COMMANDLINE_ARGS (appended after --listen), e.g. --api to enable the A1111-compatible /sdapi/v1 API
+  command: grep -q 'COMMANDLINE_ARGS=${HARBOR_FORGE_ARGS}' services/compose.forge.yml
+  tags: [spec, forge, implemented]
+- label: forge persists models, output, extensions and config under HARBOR_FORGE_WORKSPACE, and the container's ~/.cache (pip and Hugging Face downloads) under HARBOR_FORGE_WORKSPACE/cache so first-start requirement installs don't re-download after a container is recreated
+  command: for d in models output extensions config cache; do grep -q "HARBOR_FORGE_WORKSPACE}/$d:" services/compose.forge.yml || exit 1; done
+  tags: [spec, forge, implemented]
+- label: a forge-init sidecar pre-creates the workspace bind mounts owned by HARBOR_USER_ID:HARBOR_GROUP_ID and world-writable, and forge starts its entrypoint under umask 0000, so the image's fixed UID 99 can write while the host user can still manage or delete every file without sudo
+  command: grep -q 'forge-init' services/compose.forge.yml && grep -q 'condition: service_completed_successfully' services/compose.forge.yml && grep -q 'umask 0000' services/compose.forge.yml && grep -q 'chmod' services/forge/workspace-init.sh
+  tags: [spec, forge, implemented]
+- label: forge has an nvidia overlay services/compose.x.forge.nvidia.yml and a generated CDI overlay services/compose.x.forge.cdi.yml; no ROCm overlay since the image is CUDA-only
+  command: test -f services/compose.x.forge.nvidia.yml && test -f services/compose.x.forge.cdi.yml && test ! -f services/compose.x.forge.rocm.yml
+  tags: [spec, forge, implemented]
+- label: forge has a traefik cross-file routing to container port 7860, generated in the same format as seed-traefik.ts produces
+  command: test -f services/compose.x.traefik.forge.yml && grep -q 'loadbalancer.server.port=7860' services/compose.x.traefik.forge.yml
+  tags: [spec, forge, implemented]
+- label: harbor ls includes forge
+  command: ./harbor.sh ls | grep -q '^forge$'
+  tags: [spec, forge, implemented]
+- label: forge has metadata (name, tags, wikiUrl) registered in app/src/serviceMetadata.ts
+  command: grep -q '^    forge: {' app/src/serviceMetadata.ts
+  tags: [spec, forge, implemented]
+- label: forge has a documentation page at docs/2.1.20-Frontend-Forge.md covering env vars, volumes, the NVIDIA/amd64 requirement, and the slow first start
+  command: test -f docs/2.1.20-Frontend-Forge.md && grep -q 'HARBOR_FORGE_ARGS' docs/2.1.20-Frontend-Forge.md
+  tags: [spec, forge, implemented]
+
 # app
 - label: Harbor App blocks main UI behind a setup gate until setup detail status is ready
   command: rg -q 'detail\?\.status === "ready"' app/src/setup/HarborSetupContext.tsx

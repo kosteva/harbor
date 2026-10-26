@@ -1,0 +1,57 @@
+services:
+  forge:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.forge
+    image: ${HARBOR_FORGE_IMAGE}:${HARBOR_FORGE_VERSION}
+    # oromis995/sd-forge-neo only publishes amd64 (CUDA) images
+    platform: linux/amd64
+    env_file:
+      - ./.env
+      - ./services/forge/override.env
+    # Upstream's entrypoint.sh always adds --listen and splits
+    # COMMANDLINE_ARGS on whitespace
+    environment:
+      - COMMANDLINE_ARGS=${HARBOR_FORGE_ARGS}
+      - HF_TOKEN=${HARBOR_HF_TOKEN}
+    # umask 0000 keeps files written by the image's fixed UID 99 deletable by
+    # the host user (see services/forge/workspace-init.sh)
+    entrypoint:
+      - /bin/bash
+      - -c
+      - umask 0000 && exec /home/forge/sd-webui/entrypoint.sh "$$@"
+      - --
+    ports:
+      - ${HARBOR_FORGE_HOST_PORT}:7860
+    volumes:
+      - ${HARBOR_FORGE_WORKSPACE}/models:/home/forge/sd-webui/models
+      - ${HARBOR_FORGE_WORKSPACE}/output:/home/forge/sd-webui/output
+      - ${HARBOR_FORGE_WORKSPACE}/extensions:/home/forge/sd-webui/extensions
+      - ${HARBOR_FORGE_WORKSPACE}/config:/home/forge/sd-webui/config
+      # The image only ships torch; launch.py installs the remaining
+      # requirements into the container on every fresh start. Persisting the
+      # pip (and Hugging Face) cache makes that re-install offline and fast.
+      - ${HARBOR_FORGE_WORKSPACE}/cache:/home/forge/.cache
+    depends_on:
+      forge-init:
+        condition: service_completed_successfully
+    networks:
+      - harbor-network
+
+  forge-init:
+    container_name: ${HARBOR_CONTAINER_PREFIX}.forge-init
+    image: alpine:3.20
+    env_file:
+      - ./.env
+      - ./services/forge/override.env
+    environment:
+      TARGET_UID: ${HARBOR_USER_ID}
+      TARGET_GID: ${HARBOR_GROUP_ID}
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes:
+      - ./services/forge/workspace-init.sh:/init.sh:ro
+      - ${HARBOR_FORGE_WORKSPACE}/models:/mnt/models
+      - ${HARBOR_FORGE_WORKSPACE}/output:/mnt/output
+      - ${HARBOR_FORGE_WORKSPACE}/extensions:/mnt/extensions
+      - ${HARBOR_FORGE_WORKSPACE}/config:/mnt/config
+      - ${HARBOR_FORGE_WORKSPACE}/cache:/mnt/cache
+    networks:
+      - harbor-network
