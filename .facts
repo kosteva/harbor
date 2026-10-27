@@ -1394,12 +1394,12 @@
   tags: [spec, implemented]
 
 ## forge
-- forge wraps Haoming02/sd-webui-forge-classic (Forge Neo branch), an A1111-style Stable Diffusion/Flux/Qwen/Wan image generation web UI, as a Harbor frontend service using the unofficial prebuilt oromis995/sd-forge-neo image built from upstream's neo/docker Dockerfile @spec @forge @implemented
+- forge wraps Haoming02/sd-webui-forge-classic (Forge Neo branch), an A1111-style Stable Diffusion/Flux/Qwen/Wan image generation web UI, as a Harbor frontend service built from services/forge/Dockerfile, a Harbor rewrite of upstream's neo/docker Dockerfile @spec @forge @implemented
 - label: forge has a compose file at services/compose.forge.yml defining a forge service on the harbor network
   command: test -f services/compose.forge.yml && grep -q 'harbor-network' services/compose.forge.yml
   tags: [spec, forge, implemented]
-- label: forge runs HARBOR_FORGE_IMAGE:HARBOR_FORGE_VERSION (default oromis995/sd-forge-neo pinned to a dated snapshot tag, since upstream's latest tag lags the commit tags) pinned to linux/amd64, since no arm64 manifest is published
-  command: grep -q 'HARBOR_FORGE_IMAGE="oromis995/sd-forge-neo"' services/forge/default.env && grep -q 'HARBOR_FORGE_VERSION=' services/forge/default.env && grep -q 'platform: linux/amd64' services/compose.forge.yml
+- label: forge builds from services/forge/Dockerfile with the Forge Neo source at HARBOR_FORGE_GIT_REF supplied as the forge-src additional build context, with no prebuilt image or platform pin
+  command: grep -q 'HARBOR_FORGE_GIT_REF="https://github.com/Haoming02/sd-webui-forge-classic.git#neo"' services/forge/default.env && grep -q 'forge-src: ${HARBOR_FORGE_GIT_REF}' services/compose.forge.yml && grep -q 'COPY --from=forge-src' services/forge/Dockerfile && ! grep -q 'platform:' services/compose.forge.yml && ! grep -q 'HARBOR_FORGE_IMAGE' services/compose.forge.yml services/forge/default.env
   tags: [spec, forge, implemented]
 - label: forge defaults live in services/forge/default.env, not profiles/default.env
   command: test -f services/forge/default.env && ! grep -q HARBOR_FORGE_ profiles/default.env
@@ -1410,11 +1410,11 @@
 - label: forge passes HARBOR_FORGE_ARGS to upstream's entrypoint as COMMANDLINE_ARGS (appended after --listen), e.g. --api to enable the A1111-compatible /sdapi/v1 API
   command: grep -q 'COMMANDLINE_ARGS=${HARBOR_FORGE_ARGS}' services/compose.forge.yml
   tags: [spec, forge, implemented]
-- label: forge persists models, output, extensions and config under HARBOR_FORGE_WORKSPACE, and the container's ~/.cache (pip and Hugging Face downloads) under HARBOR_FORGE_WORKSPACE/cache so first-start requirement installs don't re-download after a container is recreated
+- label: forge persists models, output, extensions and config under HARBOR_FORGE_WORKSPACE, and the container's ~/.cache (pip cache for launch-time optional packages and Hugging Face downloads) under HARBOR_FORGE_WORKSPACE/cache
   command: for d in models output extensions config cache; do grep -q "HARBOR_FORGE_WORKSPACE}/$d:" services/compose.forge.yml || exit 1; done
   tags: [spec, forge, implemented]
-- label: a forge-init sidecar pre-creates the workspace bind mounts owned by HARBOR_USER_ID:HARBOR_GROUP_ID and world-writable, and forge starts its entrypoint under umask 0000, so the image's fixed UID 99 can write while the host user can still manage or delete every file without sudo
-  command: grep -q 'forge-init' services/compose.forge.yml && grep -q 'condition: service_completed_successfully' services/compose.forge.yml && grep -q 'umask 0000' services/compose.forge.yml && grep -q 'chmod' services/forge/workspace-init.sh
+- label: forge's image user is created at build time with HARBOR_USER_ID/HARBOR_GROUP_ID (replacing any existing user with that UID, reusing an existing group with that GID), and a forge-init sidecar pre-creates the workspace bind mounts owned by those IDs, so all files stay host-owned without chmod/umask workarounds
+  command: grep -q 'UID: ${HARBOR_USER_ID}' services/compose.forge.yml && grep -q 'GID: ${HARBOR_GROUP_ID}' services/compose.forge.yml && grep -q 'useradd -u "${UID}" -g "${GID}"' services/forge/Dockerfile && grep -q 'forge-init' services/compose.forge.yml && ! grep -q umask services/compose.forge.yml && ! grep -q chmod services/forge/workspace-init.sh
   tags: [spec, forge, implemented]
 - label: forge has an nvidia overlay services/compose.x.forge.nvidia.yml and a generated CDI overlay services/compose.x.forge.cdi.yml; no ROCm overlay since the image is CUDA-only
   command: test -f services/compose.x.forge.nvidia.yml && test -f services/compose.x.forge.cdi.yml && test ! -f services/compose.x.forge.rocm.yml
@@ -1430,6 +1430,18 @@
   tags: [spec, forge, implemented]
 - label: forge has a documentation page at docs/2.1.20-Frontend-Forge.md covering env vars, volumes, the NVIDIA/amd64 requirement, and the slow first start
   command: test -f docs/2.1.20-Frontend-Forge.md && grep -q 'HARBOR_FORGE_ARGS' docs/2.1.20-Frontend-Forge.md
+  tags: [spec, forge, implemented]
+- label: forge's Dockerfile defaults to the nvidia/cuda 13.0.2 runtime base and cu130 torch 2.14.0/torchvision 0.29.0 (Forge's own default TORCH_COMMAND versions), which include Blackwell sm_120 kernels; both are build args set from HARBOR_FORGE_CUDA_VERSION and HARBOR_FORGE_TORCH_INDEX
+  command: grep -q 'HARBOR_FORGE_CUDA_VERSION="13.0.2"' services/forge/default.env && grep -q 'HARBOR_FORGE_TORCH_INDEX="cu130"' services/forge/default.env && grep -q 'torch==2.14.0 torchvision==0.29.0' services/forge/Dockerfile && grep -q 'CUDA_VERSION: ${HARBOR_FORGE_CUDA_VERSION}' services/compose.forge.yml
+  tags: [spec, forge, implemented]
+- label: forge's Dockerfile runs launch.py --exit at build time so Forge's requirements and built-in extension installers are baked into the image instead of reinstalled on each container start
+  command: grep -q 'launch.py --skip-torch-cuda-test --skip-python-version-check --exit' services/forge/Dockerfile
+  tags: [spec, forge, implemented]
+- label: forge's entrypoint.sh preloads tcmalloc from the architecture-specific lib dir only when present, so the image works on both amd64 and arm64
+  command: grep -q 'uname -m' services/forge/entrypoint.sh
+  tags: [spec, forge, implemented]
+- label: services/forge/.dockerignore excludes everything except entrypoint.sh so the workspace (models) is never sent as build context
+  command: test "$(cat services/forge/.dockerignore)" = "$(printf '*\n!entrypoint.sh')"
   tags: [spec, forge, implemented]
 
 # app

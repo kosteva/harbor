@@ -1,24 +1,26 @@
 services:
   forge:
     container_name: ${HARBOR_CONTAINER_PREFIX}.forge
-    image: ${HARBOR_FORGE_IMAGE}:${HARBOR_FORGE_VERSION}
-    # oromis995/sd-forge-neo only publishes amd64 (CUDA) images
-    platform: linux/amd64
+    build:
+      context: ./services/forge
+      dockerfile: Dockerfile
+      # Forge Neo source, cloned by BuildKit at HARBOR_FORGE_GIT_REF
+      additional_contexts:
+        forge-src: ${HARBOR_FORGE_GIT_REF}
+      args:
+        CUDA_VERSION: ${HARBOR_FORGE_CUDA_VERSION}
+        TORCH_INDEX: ${HARBOR_FORGE_TORCH_INDEX}
+        # The image's user is created with the host IDs so bind-mounted
+        # files stay owned by the host user. Rebuild if they change.
+        UID: ${HARBOR_USER_ID}
+        GID: ${HARBOR_GROUP_ID}
     env_file:
       - ./.env
       - ./services/forge/override.env
-    # Upstream's entrypoint.sh always adds --listen and splits
-    # COMMANDLINE_ARGS on whitespace
+    # entrypoint.sh always adds --listen and splits COMMANDLINE_ARGS on whitespace
     environment:
       - COMMANDLINE_ARGS=${HARBOR_FORGE_ARGS}
       - HF_TOKEN=${HARBOR_HF_TOKEN}
-    # umask 0000 keeps files written by the image's fixed UID 99 deletable by
-    # the host user (see services/forge/workspace-init.sh)
-    entrypoint:
-      - /bin/bash
-      - -c
-      - umask 0000 && exec /home/forge/sd-webui/entrypoint.sh "$$@"
-      - --
     ports:
       - ${HARBOR_FORGE_HOST_PORT}:7860
     volumes:
@@ -26,10 +28,17 @@ services:
       - ${HARBOR_FORGE_WORKSPACE}/output:/home/forge/sd-webui/output
       - ${HARBOR_FORGE_WORKSPACE}/extensions:/home/forge/sd-webui/extensions
       - ${HARBOR_FORGE_WORKSPACE}/config:/home/forge/sd-webui/config
-      # The image only ships torch; launch.py installs the remaining
-      # requirements into the container on every fresh start. Persisting the
-      # pip (and Hugging Face) cache makes that re-install offline and fast.
+      # pip cache for optional packages installed at launch (--xformers,
+      # --sage, ...) and Hugging Face downloads
       - ${HARBOR_FORGE_WORKSPACE}/cache:/home/forge/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+    # Docker creates missing bind-mount targets as root:root; the init sidecar
+    # pre-creates them owned by the host user before forge starts
     depends_on:
       forge-init:
         condition: service_completed_successfully
